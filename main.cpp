@@ -1,8 +1,12 @@
 #include <math.h>
-#include <vector>
 #include <unistd.h>
 
-#include <ServoDriver.h>
+#include "ServoDriver.h"
+
+/*  Server Controller test file
+ *  Bahavior: Servos with ids \in {1..12} will oscilate within 1/10 of their maximum range
+ *            3 full periods of sinusoidal oscilation will occur before exit.
+ */
 
 int main(int argc, char* argv[]){
   double t = 0.0;
@@ -18,4 +22,6 @@ int main(int argc, char* argv[]){
     usleep(1000);
     t += 0.001;
   }
+
+  return 0;
 }  

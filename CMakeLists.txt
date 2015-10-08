@@ -29,10 +29,11 @@ file(GLOB LIBSOURCES
 "*.cpp"
 )
 
-add_library(ServoController)
-target_link_libraries(ServoController arduino-bioloid)
+add_library(ServoController ${LIBSOURCES})
+#target_link_libraries(ServoController arduino-bioloid)
 set_target_properties(ServoController PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
 install(TARGETS ServoController DESTINATION lib)
+add_executable(ServoController-Test ${LIBSOURCES})
 
 # install include dirs
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ServoController DESTINATION include)
