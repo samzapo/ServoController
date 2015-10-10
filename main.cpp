@@ -9,12 +9,12 @@
  */
 
 int main(int argc, char* argv[]){
+  std::vector<int> ids;
+  ServoDriver::init(argv[1],ids);
   double t = 0.0;
   while(t<5.0){
-    std::vector<int> ids;
     std::vector<int> pos;
-    for(int i=1;i<=12;i++){
-      ids.push_back(1);
+    for(int i=1;i<=ids.size();i++){
       pos.push_back((int) (0.1*1024.0*sin(t*2.0*M_PI)));
     }
     

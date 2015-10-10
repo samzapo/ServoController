@@ -26,8 +26,13 @@ link_directories(
                   )
 
 file(GLOB LIBSOURCES
-"*.cpp"
+"*.c" "*.cpp"
 )
+
+set(LIBSOURCES
+   ServoDriver.cpp
+   main.cpp
+   )
 
 add_library(ServoController ${LIBSOURCES})
 #target_link_libraries(ServoController arduino-bioloid)
