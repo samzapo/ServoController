@@ -25,20 +25,11 @@ link_directories(
                   /usr/local/lib
                   )
 
-file(GLOB LIBSOURCES
-"*.c" "*.cpp"
-)
-
-set(LIBSOURCES
-   ServoDriver.cpp
-   main.cpp
-   )
-
-add_library(ServoController ${LIBSOURCES})
+ add_library(ServoController ServoDriver.cpp)
 #target_link_libraries(ServoController arduino-bioloid)
 set_target_properties(ServoController PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
 install(TARGETS ServoController DESTINATION lib)
-add_executable(ServoController-Test ${LIBSOURCES})
+add_executable(ServoController-Test ServoDriver.cpp main.cpp)
 
 # install include dirs
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ServoController DESTINATION include)

@@ -3,16 +3,20 @@
 
 #include <vector>
 namespace ServoDriver{
+  enum Parameter{
+    P_POSITION  = 1,
+    P_VELOCITY  = 2,
+    P_LOAD      = 3,
+    P_SPECIAL   = 4
+  };
+  
   bool init(const char* sp,std::vector<int> ids);
   
-  bool getPos(const std::vector<int> ids, std::vector<int> val);
-  bool setPos(const std::vector<int> ids, const std::vector<int> pos);
+  template <class T>
+  bool getVal(const std::vector<int> ids, const Parameter type, std::vector<T> val);
   
-  bool getVel(const std::vector<int> ids, std::vector<int> val);
-  bool setVel(const std::vector<int> ids, std::vector<int> val);
-  
-  bool getLoad(const std::vector<int> ids, std::vector<int> val);
-  bool setLoad(const std::vector<int> ids, std::vector<int> val);
+  template <class T>
+  bool setVal(const std::vector<int> ids, const Parameter type, const std::vector<T> val);
 }
 
 #endif // __SERVO_DRIVER_H__

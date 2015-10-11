@@ -7,13 +7,6 @@
 #include <assert.h>
 #include <sstream>
 
-enum Parameter{
-  P_POSITION  = 1,
-  P_VELOCITY  = 2,
-  P_LOAD      = 3,
-  P_SPECIAL   = 4
-};
-
 enum Inst{
   INST_PING       = 1   ,
   INST_READ       = 2   ,
@@ -23,16 +16,6 @@ enum Inst{
   INST_RESET      = 6   ,
   INST_SYNC_WRITE = 0x83
 };
-
-
-const unsigned char C_READ       = INST_READ        % 0x100;
-const unsigned char C_WRITE      = INST_WRITE       % 0x100;
-const unsigned char C_SYNC_WRITE = INST_SYNC_WRITE  % 0x100;
-
-const unsigned char C_POSITION = P_POSITION % 0x100;
-const unsigned char C_VELOCITY = P_VELOCITY % 0x100;
-const unsigned char C_LOAD     = P_LOAD     % 0x100;
-const unsigned char C_SPECIAL  = P_SPECIAL  % 0x100;
 
 enum Inds{
  TYPE_INDEX      = 0,
@@ -46,17 +29,17 @@ enum Inds{
 void error(char* msg)
 {
   fprintf(stderr, "%s\n",msg);
-  exit(EXIT_FAILURE);
+//  exit(EXIT_FAILURE);
 }
 
-const int buf_max = 256;
+const int buf_max = 256*256;
 
 int fd = -1;
 int baudrate = 1000000;  // default
-char quiet=0;
-char eolchar = '\n';
+uint8_t quiet=1;
+uint8_t eolchar = '\n';
 int timeout = 10;
-char buf[buf_max];
+uint8_t buf[buf_max];
 int rc,n;
 
 
@@ -69,72 +52,85 @@ int rc,n;
  *  REQUEST_TYPE, PARAMETER, N_IDS, L_SIZE
  */
 
-void Send(const char* out_buf){
+void Send(uint8_t * out_buf){
 #ifndef NDEBUG
-  int nbytes_header = HEADER_SIZE;
-  
   // Check Header
   printf("Message header:\n");
-  for (int i=0; i<nbytes_header-1; i++) {
+  for (int i=0; i<HEADER_SIZE-1; i++) {
     printf(" %02x",out_buf[i]);
   }
   printf("\n\n");
 #endif
   
-  int N_read = out_buf[N_INDEX];
-  int L_read = out_buf[L_INDEX]+1;
+  int N = out_buf[N_INDEX];
+  int L = out_buf[L_INDEX]+1;
   
 #ifndef NDEBUG
   printf("Message body:\n");
-  for (int i=0;i<N_read; i++) {
-    for (int j=0;j<L_read; j++) {
-      printf(" %02x",out_buf[nbytes_header+i*L_read+j]);
+  for (int i=0;i<N; i++) {
+    for (int j=0;j<L; j++) {
+      printf(" %02x",out_buf[HEADER_SIZE+i*L+j]);
     }
     printf("\n");
   }
   printf("END\n");
 #endif
-  rc = serialport_write(fd, out_buf);
+  int message_size = HEADER_SIZE + N*L;
+  rc = serialport_write(fd, out_buf,message_size);
 }
 
-void Recieve(char* in_buf){
-  int nbytes_header = HEADER_SIZE;
+void Recieve(uint8_t* in_buf){
   // Read Header
-  rc = serialport_read(fd, buf, nbytes_header, buf_max, timeout);
+  rc = serialport_read(fd, buf, HEADER_SIZE, buf_max, timeout);
   
 #ifndef NDEBUG
   // Check Header
   printf("Message header:\n");
-  for (int i=0; i<nbytes_header-1; i++) {
+  for (int i=0; i<HEADER_SIZE-1; i++) {
     printf(" %02x",buf[i]);
   }
   printf("\n\n");
 #endif
   
-  int N_read = buf[N_INDEX];
-  int L_read = buf[L_INDEX]+1;
+  int N = buf[N_INDEX];
+  int L = buf[L_INDEX]+1;
   
-  int nbytes_body = N_read * L_read;
-  rc = serialport_read(fd, &buf[nbytes_header], nbytes_body, buf_max-nbytes_header, timeout);
+  int nbytes_body = N * L;
+  rc = serialport_read(fd, &buf[HEADER_SIZE], nbytes_body, buf_max-HEADER_SIZE, timeout);
   
   
 #ifndef NDEBUG
   printf("Message body:\n");
-  for (int i=0;i<N_read; i++) {
-    for (int j=0;j<L_read; j++) {
-      printf(" %02x",buf[nbytes_header+i*L_read+j]);
+  for (int i=0;i<N; i++) {
+    for (int j=0;j<L; j++) {
+      printf(" %02x",buf[HEADER_SIZE+i*L+j]);
     }
     printf("\n");
   }
   printf("END\n");
 #endif
+}
+
+/// Fills 'ids' with ids of servos that are accessible
+bool ServoDriver::init(const char* sp,std::vector<int> ids){
+  
+  if( fd!=-1 ) {
+    serialport_close(fd);
+    if(!quiet) printf("closed port %s\n");
+  }
+  fd = serialport_init(sp, baudrate);
+  if( fd==-1 ) error("couldn't open port");
+  if(!quiet) printf("opened port %s\n",sp);
+  serialport_flush(fd);
+  
+  return true;
 }
 
 /////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Data Parsing ////////////////////////////
 
 template <class T>
-void data2vector(const char * in_buf,const std::vector<int> ids,std::vector<T> val){
+void data2vector(const uint8_t * in_buf,const std::vector<int> ids,std::vector<T> val){
   T val_array[0xFF];
   
   int N = in_buf[N_INDEX];
@@ -142,7 +138,8 @@ void data2vector(const char * in_buf,const std::vector<int> ids,std::vector<T> v
   int size_of_values = sizeof(T);
 
   // now we only support single values in this function
-  assert(size_of_values == L-1);
+  if(size_of_values != L-1)
+    error("Data being imported is the wrong size for this type!");
   
   for (int i=0;i<N; i++) {
     val_array[in_buf[HEADER_SIZE+i*L]] = *( (T*) &in_buf[HEADER_SIZE+i*L+1]);
@@ -154,7 +151,7 @@ void data2vector(const char * in_buf,const std::vector<int> ids,std::vector<T> v
 }
 
 template <class T>
-void data2vecvec(const char * in_buf,const std::vector<int> ids,std::vector<std::vector<T> > val){
+void data2vecvec(const uint8_t * in_buf,const std::vector<int> ids,std::vector<std::vector<T> > val){
   std::vector<T> val_array[0xFF];
   
   int N = in_buf[N_INDEX];
@@ -174,154 +171,81 @@ void data2vecvec(const char * in_buf,const std::vector<int> ids,std::vector<std:
   }
 }
 
-/// Fills 'ids' with ids of servos that are accessible
-bool ServoDriver::init(const char* sp,std::vector<int> ids){
-  
-  if( fd!=-1 ) {
-    serialport_close(fd);
-    if(!quiet) printf("closed port %s\n");
-  }
-  fd = serialport_init(sp, baudrate);
-  if( fd==-1 ) error("couldn't open port");
-  if(!quiet) printf("opened port %s\n",sp);
-  serialport_flush(fd);
-  
-  return true;
-}
-
 /////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Control Handling ////////////////////////////
 
-bool ServoDriver::setPos(const std::vector<int> ids, const std::vector<int> val){
+template<>
+bool ServoDriver::setVal<int>(const std::vector<int> ids, const Parameter type, const std::vector<int> val){
   if( fd == -1 ) error("serial port not opened");
  // TODO: Tell servo to set desired POSITION of each servo in 'ids' to each positon in 'val'
   
-  std::stringstream ss;
+  uint8_t N = ids.size() % 0x100;
+  uint8_t L = sizeof(uint16_t);
   
-  unsigned char N = ids.size() % 0x100;
-  unsigned char L = 0x00;
+  buf[0] = INST_WRITE % 0x100;
+  buf[1] = (int)type % 0x100;
+  buf[2] = N;
+  buf[3] = L;
   
-  ss << C_READ << C_POSITION << N << L;
-  for(int i=0;i<ids.size();i++){
-    unsigned char i1 = ids[i] % 0x100;
-    unsigned char v1 = val[i] % 0x100;
-    unsigned char v2 = val[i] / 0x100;
-    ss << i1 << v1 << v2;
+#ifndef NDEBUG
+  printf("Position:\n");
+#endif
+  for(int i=0;i<N;i++){
+    uint8_t i1 = ids[i] % 0x100;
+    uint8_t v1 = val[i] % 0x100;
+    uint8_t v2 = val[i] / 0x100;
+    buf[HEADER_SIZE + i*(L+1)]     = i1;
+    buf[HEADER_SIZE + i*(L+1) + 1] = v1;
+    buf[HEADER_SIZE + i*(L+1) + 2] = v2;
+    
+#ifndef NDEBUG
+    printf("%d: %d --> %02x: %02x %02x\n",ids[i],val[i],i1,v1,v2);
+#endif
   }
+#ifndef NDEBUG
+  printf("END\n");
+#endif
   
-  Send(ss.str().c_str());
+  Send(buf);
   
   return true;
 }
 
-bool ServoDriver::getPos(const std::vector<int> ids, std::vector<int> val){
+template<>
+bool ServoDriver::getVal<int>(const std::vector<int> ids, const Parameter type,  std::vector<int> val){
   if( fd == -1 ) error("serial port not opened");
  // TODO: Get POSITION of each servo in 'ids' and set 'val'
-  std::stringstream ss;
   
-  unsigned char N = ids.size() % 0x100;
-  unsigned char L = 0x00;
+  uint8_t N = ids.size() % 0x100;
+  uint8_t L = 0x00;
   
-  ss << C_READ << C_POSITION << N << L;
-  for(int i=0;i<ids.size();i++){
-    unsigned char i1 = ids[i] % 0x100;
-    ss << i1;
+  buf[0] = INST_READ % 0x100;
+  buf[1] = (int)type % 0x100;
+  buf[2] = N;
+  buf[3] = L;
+  
+#ifndef NDEBUG
+  printf("Load:\n");
+#endif
+  for(int i=0;i<N;i++){
+    uint8_t i1 = ids[i] % 0x100;
+    buf[HEADER_SIZE + i*(L+1)]     = i1;
+    
+#ifndef NDEBUG
+    printf("%d --> %02x\n",ids[i],i1);
+#endif
   }
+#ifndef NDEBUG
+  printf("END\n");
+#endif
   
-  Send(ss.str().c_str());
+  Send(buf);
+  
   // Write Header
   Recieve(buf);
   
   data2vector<int>(buf,ids,val);
   
-  return true;
-}
-
-bool ServoDriver::getVel(const std::vector<int> ids, std::vector<int> val){
-  if( fd == -1 ) error("serial port not opened");
- // TODO: Get VELOCITY of each servo in 'ids' and set 'val'
-  std::stringstream ss;
-  
-  unsigned char N = ids.size() % 0x100;
-  unsigned char L = 0x00;
-  
-  ss << C_READ << C_VELOCITY << N << L;
-  for(int i=0;i<ids.size();i++){
-    unsigned char i1 = ids[i] % 0x100;
-    ss << i1;
-  }
-  
-  Send(ss.str().c_str());
-  // Write Header
-  Recieve(buf);
-  
-  data2vector<int>(buf,ids,val);
-  
-  return true;
-}
-
-bool ServoDriver::setVel(const std::vector<int> ids, std::vector<int> val){
-  if( fd == -1 ) error("serial port not opened");
- // TODO: Set desired VELOCITY of each servo in 'ids' to each velocity in 'val'
-  std::stringstream ss;
-  
-  unsigned char N = ids.size() % 0x100;
-  unsigned char L = 0x00;
-  
-  ss << C_READ << C_VELOCITY << N << L;
-  for(int i=0;i<ids.size();i++){
-    unsigned char i1 = ids[i] % 0x100;
-    unsigned char v1 = val[i] % 0x100;
-    unsigned char v2 = val[i] / 0x100;
-    ss << i1 << v1 << v2;
-  }
-  
-  Send(ss.str().c_str());
-
-  return true;
-}
-
-bool ServoDriver::getLoad(const std::vector<int> ids, std::vector<int> val){
-  if( fd == -1 ) error("serial port not opened");
- // TODO: Get LOAD of each servo in 'ids' and set 'val'
-  std::stringstream ss;
-
-  unsigned char N = ids.size() % 0x100;
-  unsigned char L = 0x00;
-
-  ss << C_READ << C_LOAD << N << L;
-  for(int i=0;i<ids.size();i++){
-    unsigned char i1 = ids[i] % 0x100;
-    ss << i1;
-  }
-  
-  Send(ss.str().c_str());
-  // Write Header
-  Recieve(buf);
-  
-  data2vector<int>(buf,ids,val);
-  
-  return true;
-}
-
-bool ServoDriver::setLoad(const std::vector<int> ids, std::vector<int> val){
-  if( fd == -1 ) error("serial port not opened");
- // TODO: Set desired LOAD of each servo in 'ids' to each load in 'val'
-  std::stringstream ss;
-  
-  unsigned char N = ids.size() % 0x100;
-  unsigned char L = 0x00;
-  
-  ss << C_READ << C_LOAD << N << L;
-  for(int i=0;i<ids.size();i++){
-    unsigned char i1 = ids[i] % 0x100;
-    unsigned char v1 = val[i] % 0x100;
-    unsigned char v2 = val[i] / 0x100;
-    ss << i1 << v1 << v2;
-  }
-  
-  Send(ss.str().c_str());
-
   return true;
 }
 
