@@ -6,15 +6,20 @@
 # Read Request
 
  *4 byte header:*
+    
     Read/Write/RW
     Position/Velocity/Load/Misc
     N = # of IDs
     L = # of Bytes per ID data
+
 *`N` data blocks of size `(L + 1)` bytes*
+
     1:
       ID (1 byte)
       Data (L bytes)
+
 ....
+
     N:
       ID (1 byte)
       Data (L bytes)
