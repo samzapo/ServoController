@@ -20,7 +20,8 @@ int main(int argc, char* argv[]){
   typedef uint16_t ValueType;
   
   double t = 0.0;
-/*
+
+  // Use position controller
   while(t<5.0){
     std::vector<ValueType> pos(ids.size());
     for(int i=0;i<ids.size();i++){
@@ -31,7 +32,9 @@ int main(int argc, char* argv[]){
     usleep(1000);
     t += 0.001;
   }
-  */
+  
+
+  // Use torque controller
   t = 0.0;
   while(t<5.0){
     std::vector<ValueType> pos(ids.size()), vel(ids.size());
