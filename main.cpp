@@ -16,14 +16,17 @@ int main(int argc, char* argv[]){
     ids[i] = i+1;
   }
   ServoDriver::init(argv[1],ids);
+  
+  typedef uint16_t ValueType;
+  
   double t = 0.0;
   while(t<5.0){
-    std::vector<int> pos(ids.size());
+    std::vector<ValueType> pos(ids.size());
     for(int i=0;i<ids.size();i++){
-      pos[i] = (int) (2*1024 + 0.1*1024.0*sin(t*2.0*M_PI));
+      pos[i] = (ValueType) (2*1024 + 0.1*1024.0*sin(t*2.0*M_PI));
     }
     
-    ServoDriver::setVal<int>(ids,ServoDriver::P_POSITION,pos);
+    ServoDriver::setVal<ValueType>(ids,ServoDriver::P_POSITION,pos);
     usleep(1000);
     t += 0.001;
   }

@@ -13,10 +13,10 @@ namespace ServoDriver{
   bool init(const char* sp,std::vector<int> ids);
   
   template <class T>
-  bool getVal(const std::vector<int> ids, const Parameter type, std::vector<T> val);
+  bool getVal(const std::vector<int>& ids, const Parameter type, std::vector<T>& val);
   
   template <class T>
-  bool setVal(const std::vector<int> ids, const Parameter type, const std::vector<T> val);
+  bool setVal(const std::vector<int>& ids, const Parameter type, const std::vector<T>& val);
 }
 
 #endif // __SERVO_DRIVER_H__

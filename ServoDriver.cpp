@@ -56,7 +56,7 @@ void Send(uint8_t * out_buf){
 #ifndef NDEBUG
   // Check Header
   printf("Message header:\n");
-  for (int i=0; i<HEADER_SIZE-1; i++) {
+  for (int i=0; i<HEADER_SIZE; i++) {
     printf(" %02x",out_buf[i]);
   }
   printf("\n\n");
@@ -86,7 +86,7 @@ void Recieve(uint8_t* in_buf){
 #ifndef NDEBUG
   // Check Header
   printf("Message header:\n");
-  for (int i=0; i<HEADER_SIZE-1; i++) {
+  for (int i=0; i<HEADER_SIZE; i++) {
     printf(" %02x",buf[i]);
   }
   printf("\n\n");
@@ -130,7 +130,7 @@ bool ServoDriver::init(const char* sp,std::vector<int> ids){
 ///////////////////////////  Data Parsing ////////////////////////////
 
 template <class T>
-void data2vector(const uint8_t * in_buf,const std::vector<int> ids,std::vector<T> val){
+void data2vector(const uint8_t * in_buf,const std::vector<int>& ids,std::vector<T>& val){
   T val_array[0xFF];
   
   int N = in_buf[N_INDEX];
@@ -142,7 +142,8 @@ void data2vector(const uint8_t * in_buf,const std::vector<int> ids,std::vector<T
     error("Data being imported is the wrong size for this type!");
   
   for (int i=0;i<N; i++) {
-    val_array[in_buf[HEADER_SIZE+i*L]] = *( (T*) &in_buf[HEADER_SIZE+i*L+1]);
+    uint8_t ind = in_buf[HEADER_SIZE+i*L];
+    memcpy(&val_array[ind],&in_buf[HEADER_SIZE+i*L+1],size_of_values);
   }
   
   for (int i=0;i<ids.size(); i++) {
@@ -151,7 +152,7 @@ void data2vector(const uint8_t * in_buf,const std::vector<int> ids,std::vector<T
 }
 
 template <class T>
-void data2vecvec(const uint8_t * in_buf,const std::vector<int> ids,std::vector<std::vector<T> > val){
+void data2vecvec(const uint8_t * in_buf,const std::vector<int>& ids,std::vector<std::vector<T> >& val){
   std::vector<T> val_array[0xFF];
   
   int N = in_buf[N_INDEX];
@@ -174,13 +175,13 @@ void data2vecvec(const uint8_t * in_buf,const std::vector<int> ids,std::vector<s
 /////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Control Handling ////////////////////////////
 
-template<>
-bool ServoDriver::setVal<int>(const std::vector<int> ids, const Parameter type, const std::vector<int> val){
+template<class T>
+bool setVal(const std::vector<int>& ids, const ServoDriver::Parameter type, const std::vector<T>& val){
   if( fd == -1 ) error("serial port not opened");
  // TODO: Tell servo to set desired POSITION of each servo in 'ids' to each positon in 'val'
   
   uint8_t N = ids.size() % 0x100;
-  uint8_t L = sizeof(uint16_t);
+  const uint8_t L = sizeof(T);
   
   buf[0] = INST_WRITE % 0x100;
   buf[1] = (int)type % 0x100;
@@ -191,15 +192,21 @@ bool ServoDriver::setVal<int>(const std::vector<int> ids, const Parameter type, 
   printf("Position:\n");
 #endif
   for(int i=0;i<N;i++){
+    uint8_t v[L];
+    memcpy(v, &val[i], L);
+
     uint8_t i1 = ids[i] % 0x100;
-    uint8_t v1 = val[i] % 0x100;
-    uint8_t v2 = val[i] / 0x100;
     buf[HEADER_SIZE + i*(L+1)]     = i1;
-    buf[HEADER_SIZE + i*(L+1) + 1] = v1;
-    buf[HEADER_SIZE + i*(L+1) + 2] = v2;
+    for(int j=0;j<L;j++){
+      buf[HEADER_SIZE + i*(L+1) + j + 1] = v[j];
+    }
     
 #ifndef NDEBUG
-    printf("%d: %d --> %02x: %02x %02x\n",ids[i],val[i],i1,v1,v2);
+//    printf("%d:  (%s) floating point:%f OR integer:%d --> %02x: ",ids[i],typeid(T).name(),val[i],val[i],i1);
+    for(int j=0;j<L;j++)
+      printf(" %02x",buf[HEADER_SIZE + i*(L+1) + j + 1]);
+    printf("\n");
+    
 #endif
   }
 #ifndef NDEBUG
@@ -208,16 +215,27 @@ bool ServoDriver::setVal<int>(const std::vector<int> ids, const Parameter type, 
   
   Send(buf);
   
+#ifndef NDEBUG
+  printf("Position (re-parsed):\n");
+  std::vector<T> val2(ids.size());
+  data2vector<T>(buf,ids,val2);
+  for(int i=0;i<ids.size();i++){
+//    printf("%d: (%s) floating point:%f OR integer:%d \n",ids[i],typeid(T).name(),val2[i],val2[i]);
+  }
+  printf("END\n");
+#endif
+
+
   return true;
 }
 
-template<>
-bool ServoDriver::getVal<int>(const std::vector<int> ids, const Parameter type,  std::vector<int> val){
+template<class T>
+bool getVal(const std::vector<int>& ids, const ServoDriver::Parameter type,  std::vector<T>& val){
   if( fd == -1 ) error("serial port not opened");
  // TODO: Get POSITION of each servo in 'ids' and set 'val'
   
   uint8_t N = ids.size() % 0x100;
-  uint8_t L = 0x00;
+  const uint8_t L = 0x00;
   
   buf[0] = INST_READ % 0x100;
   buf[1] = (int)type % 0x100;
@@ -244,9 +262,67 @@ bool ServoDriver::getVal<int>(const std::vector<int> ids, const Parameter type, 
   // Write Header
   Recieve(buf);
   
-  data2vector<int>(buf,ids,val);
+  data2vector<T>(buf,ids,val);
   
   return true;
 }
 
+//////////////////////////////////////////////////////////////////////////////
+// Template specializations so I can put the big templated function in here //
+
+// SHORT
+template<>
+bool ServoDriver::setVal<uint16_t>(const std::vector<int>& ids, const Parameter type, const std::vector<uint16_t>& val){
+  return ::setVal<uint16_t>(ids,type,val);
+}
+
+template<>
+bool ServoDriver::getVal<uint16_t>(const std::vector<int>& ids, const Parameter type, std::vector<uint16_t>& val){
+  return ::getVal<uint16_t>(ids,type,val);
+}
+
+// CHAR
+template<>
+bool ServoDriver::setVal<uint8_t>(const std::vector<int>& ids, const Parameter type, const std::vector<uint8_t>& val){
+  return ::setVal<uint8_t>(ids,type,val);
+}
+
+template<>
+bool ServoDriver::getVal<uint8_t>(const std::vector<int>& ids, const Parameter type, std::vector<uint8_t>& val){
+  return ::getVal<uint8_t>(ids,type,val);
+}
+
+
+// FLOAT (32 bit)
+template<>
+bool ServoDriver::setVal<float>(const std::vector<int>& ids, const Parameter type, const std::vector<float>& val){
+  return ::setVal<float>(ids,type,val);
+}
+
+template<>
+bool ServoDriver::getVal<float>(const std::vector<int>& ids, const Parameter type, std::vector<float>& val){
+  return ::getVal<float>(ids,type,val);
+}
+
+// DOUBLE (64 bit)
+template<>
+bool ServoDriver::setVal<double>(const std::vector<int>& ids, const Parameter type, const std::vector<double>& val){
+  return ::setVal<double>(ids,type,val);
+}
+
+template<>
+bool ServoDriver::getVal<double>(const std::vector<int>& ids, const Parameter type, std::vector<double>& val){
+  return ::getVal<double>(ids,type,val);
+}
+
+// INT (32 bit)
+template<>
+bool ServoDriver::setVal<int>(const std::vector<int>& ids, const Parameter type, const std::vector<int>& val){
+  return ::setVal<int>(ids,type,val);
+}
+
+template<>
+bool ServoDriver::getVal<int>(const std::vector<int>& ids, const Parameter type, std::vector<int>& val){
+  return ::getVal<int>(ids,type,val);
+}
 #include "arduino-serial-lib.c"
