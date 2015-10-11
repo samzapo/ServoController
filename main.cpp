@@ -20,6 +20,7 @@ int main(int argc, char* argv[]){
   typedef uint16_t ValueType;
   
   double t = 0.0;
+/*
   while(t<5.0){
     std::vector<ValueType> pos(ids.size());
     for(int i=0;i<ids.size();i++){
@@ -27,6 +28,24 @@ int main(int argc, char* argv[]){
     }
     
     ServoDriver::setVal<ValueType>(ids,ServoDriver::P_POSITION,pos);
+    usleep(1000);
+    t += 0.001;
+  }
+  */
+  t = 0.0;
+  while(t<5.0){
+    std::vector<ValueType> pos(ids.size()), vel(ids.size());
+    for(int i=0;i<ids.size();i++){
+      pos[i] = (ValueType) (1024 + 0.1*1024.0*sin(t*2.0*M_PI));
+    }
+    
+    ServoDriver::setVal<ValueType>(ids,ServoDriver::P_LOAD,pos);
+    ServoDriver::getVal<ValueType>(ids,ServoDriver::P_POSITION,pos);
+    ServoDriver::getVal<ValueType>(ids,ServoDriver::P_VELOCITY,vel);
+    printf("|    POS    |    VEL    |\n");
+    for(int i=0;i<ids.size();i++)
+     printf("|  %7d  |  %7d  |\n",pos[i],vel[i]);
+    printf("\n");
     usleep(1000);
     t += 0.001;
   }
