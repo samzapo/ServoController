@@ -1,7 +1,21 @@
 ### Simple Arduino Control Protocol (Dynamixel and simple sensors)
+## Installing
+
+    my-laptop$ git clone https://github.com/samzapo/ServoController.git
+    my-laptop$ cd ServoController
+    my-laptop$ mkdir build; cd build
+    my-laptop$ cmake ..
+    my-laptop$ make
+
+    and then run the test program
+
 ## Usage:
-    ./ServoController-Test <arduino serial port> 
-## Example of the Protocol
+
+  test the library with:
+
+    my-laptop$ ./ServoController-Test <arduino serial port> 
+
+# Example of the Protocol
 
 # Read Request
 
