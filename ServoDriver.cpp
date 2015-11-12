@@ -35,7 +35,7 @@ void error(char* msg)
 const int buf_max = 256*256;
 
 int fd = -1;
-int baudrate = 1000000;  // default
+int baudrate = 57600;  // default
 uint8_t quiet=1;
 uint8_t eolchar = '\n';
 int timeout = 10;

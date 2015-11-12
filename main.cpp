@@ -15,6 +15,7 @@ int main(int argc, char* argv[]){
   for(int i=0;i<ids.size();i++){
     ids[i] = i+1;
   }
+  ids[2] = 100;
   ServoDriver::init(argv[1],ids);
   
   typedef uint16_t ValueType;

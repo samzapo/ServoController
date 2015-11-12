@@ -26,11 +26,12 @@ int serialport_init(const char* serialport, int baud)
     struct termios toptions;
     int fd;
     
-    //fd = open(serialport, O_RDWR | O_NOCTTY | O_NDELAY);
-    fd = open(serialport, O_RDWR | O_NONBLOCK );
+    fd = open(serialport, O_RDWR | O_NOCTTY | O_NDELAY);
+    //fd = open(serialport, O_RDWR | O_NONBLOCK );
     
     if (fd == -1)  {
         perror("serialport_init: Unable to open port ");
+        printf("serialport_init: Unable to open port %s",serialport);
         return -1;
     }
     
@@ -38,6 +39,7 @@ int serialport_init(const char* serialport, int baud)
     //ioctl(fd, TIOCMBIS, &iflags);     // turn on DTR
     //ioctl(fd, TIOCMBIC, &iflags);    // turn off DTR
 
+    fcntl(fd, F_SETFL, 0); // blocking
     if (tcgetattr(fd, &toptions) < 0) {
         perror("serialport_init: Couldn't get term attributes");
         return -1;
@@ -80,6 +82,7 @@ int serialport_init(const char* serialport, int baud)
     toptions.c_cc[VMIN]  = 0;
     toptions.c_cc[VTIME] = 0;
     //toptions.c_cc[VTIME] = 20;
+    toptions.c_cflag=B57600;
     
     tcsetattr(fd, TCSANOW, &toptions);
     if( tcsetattr(fd, TCSAFLUSH, &toptions) < 0) {
@@ -114,6 +117,7 @@ int serialport_write(int fd, const uint8_t* str, int len )
   }
     int n = write(fd, str, len);
     if( n!=len ) {
+        printf("serialport_write: couldn't write string: '%s'\n",str);
         perror("serialport_write: couldn't write whole string\n");
         return -1;
     }
