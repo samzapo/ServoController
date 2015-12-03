@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <sstream>
 
+
 enum Inst{
   INST_PING       = 1   ,
   INST_READ       = 2   ,
@@ -32,21 +33,25 @@ void error(char* msg)
 //  exit(EXIT_FAILURE);
 }
 
-const int buf_max = 256*256;
+const int buf_max = 12*12;
 
-int fd = -1;
-int baudrate = 57600;  // default
 uint8_t quiet=1;
 uint8_t eolchar = '\n';
 int timeout = 10;
 uint8_t buf[buf_max];
-int rc,n;
-
 
 /////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Serial Handling ////////////////////////////
-#include "arduino-serial-lib.h"
+#include <SerialPort.h>
+#include <iostream>
 
+SerialPort * ardu;
+
+void serialport_open(const char* sp){
+  /*The arduino must be setup to use the same baud rate*/ 
+  ardu = new SerialPort(sp);
+  ardu->Open(SerialPort::BAUD_9600, SerialPort::CHAR_SIZE_8);
+}
 
 /* HEADER:
  *  REQUEST_TYPE, PARAMETER, N_IDS, L_SIZE
@@ -76,34 +81,40 @@ void Send(uint8_t * out_buf){
   printf("END\n");
 #endif
   int message_size = HEADER_SIZE + N*L;
-  rc = serialport_write(fd, out_buf,message_size);
+  SerialPort::DataBuffer buf(out_buf, out_buf + sizeof(out_buf)/ sizeof(out_buf[0]));
+  ardu->Write(buf);
 }
 
 void Recieve(uint8_t* in_buf){
   // Read Header
-  rc = serialport_read(fd, buf, HEADER_SIZE, buf_max, timeout);
+  SerialPort::DataBuffer buf;
+  ardu->Read(buf, HEADER_SIZE, timeout);
   
+  for (int i=0; i<HEADER_SIZE; i++)
+    in_buf[i] = buf[i];
 #ifndef NDEBUG
   // Check Header
   printf("Message header:\n");
   for (int i=0; i<HEADER_SIZE; i++) {
-    printf(" %02x",buf[i]);
+    printf(" %02x",in_buf[i]);
   }
   printf("\n\n");
 #endif
-  
+
   int N = buf[N_INDEX];
   int L = buf[L_INDEX]+1;
   
   int nbytes_body = N * L;
-  rc = serialport_read(fd, &buf[HEADER_SIZE], nbytes_body, buf_max-HEADER_SIZE, timeout);
-  
-  
+
+  ardu->Read(buf, nbytes_body, timeout);
+  for (int i=0; i<nbytes_body; i++)
+    in_buf[i+HEADER_SIZE] = buf[i];
+
 #ifndef NDEBUG
   printf("Message body:\n");
   for (int i=0;i<N; i++) {
     for (int j=0;j<L; j++) {
-      printf(" %02x",buf[HEADER_SIZE+i*L+j]);
+      printf(" %02x",in_buf[HEADER_SIZE+i*L+j]);
     }
     printf("\n");
   }
@@ -113,18 +124,85 @@ void Recieve(uint8_t* in_buf){
 
 /// Fills 'ids' with ids of servos that are accessible
 bool ServoDriver::init(const char* sp,std::vector<int> ids){
-  
-  if( fd!=-1 ) {
-    serialport_close(fd);
-    if(!quiet) printf("closed port %s\n");
-  }
-  fd = serialport_init(sp, baudrate);
-  if( fd==-1 ) error("couldn't open port");
-  if(!quiet) printf("opened port %s\n",sp);
-  serialport_flush(fd);
+//  serialport_init(sp,115200);
+  serialport_open(sp);
   
   return true;
 }
+/*
+int serialport_init(const char* serialport, int baud)
+{
+  struct termios toptions;
+  int fd;
+  
+  fd = open(serialport, O_RDWR | O_NOCTTY | O_NDELAY);
+  //fd = open(serialport, O_RDWR | O_NONBLOCK );
+  
+  if (fd == -1)  {
+    perror("serialport_init: Unable to open port ");
+    printf("serialport_init: Unable to open port %s",serialport);
+    return -1;
+  }
+  
+  //int iflags = TIOCM_DTR;
+  //ioctl(fd, TIOCMBIS, &iflags);     // turn on DTR
+  //ioctl(fd, TIOCMBIC, &iflags);    // turn off DTR
+  
+  fcntl(fd, F_SETFL, 0); // blocking
+  if (tcgetattr(fd, &toptions) < 0) {
+    perror("serialport_init: Couldn't get term attributes");
+    return -1;
+  }
+  speed_t brate = baud; // let you override switch below if needed
+  switch(baud) {
+    case 4800:   brate=B4800;   break;
+    case 9600:   brate=B9600;   break;
+#ifdef B14400
+    case 14400:  brate=B14400;  break;
+#endif
+    case 19200:  brate=B19200;  break;
+#ifdef B28800
+    case 28800:  brate=B28800;  break;
+#endif
+    case 38400:  brate=B38400;  break;
+    case 57600:  brate=B57600;  break;
+    case 115200: brate=B115200; break;
+  }
+  cfsetispeed(&toptions, brate);
+  cfsetospeed(&toptions, brate);
+  
+  // 8N1
+  toptions.c_cflag &= ~PARENB;
+  toptions.c_cflag &= ~CSTOPB;
+  toptions.c_cflag &= ~CSIZE;
+  toptions.c_cflag |= CS8;
+  // no flow control
+  toptions.c_cflag &= ~CRTSCTS;
+  
+  //toptions.c_cflag &= ~HUPCL; // disable hang-up-on-close to avoid reset
+  
+  toptions.c_cflag |= CREAD | CLOCAL;  // turn on READ & ignore ctrl lines
+  toptions.c_iflag &= ~(IXON | IXOFF | IXANY); // turn off s/w flow ctrl
+  
+  toptions.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // make raw
+  toptions.c_oflag &= ~OPOST; // make raw
+  
+  // see: http://unixwiz.net/techtips/termios-vmin-vtime.html
+  toptions.c_cc[VMIN]  = 0;
+  toptions.c_cc[VTIME] = 0;
+  //toptions.c_cc[VTIME] = 20;
+  toptions.c_cflag=B57600;
+  
+  tcsetattr(fd, TCSANOW, &toptions);
+  if( tcsetattr(fd, TCSAFLUSH, &toptions) < 0) {
+    perror("init_serialport: Couldn't set term attributes");
+    return -1;
+  }
+  
+  return fd;
+}
+
+*/
 
 /////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Data Parsing ////////////////////////////
@@ -177,7 +255,6 @@ void data2vecvec(const uint8_t * in_buf,const std::vector<int>& ids,std::vector<
 
 template<class T>
 bool setVal(const std::vector<int>& ids, const ServoDriver::Parameter type, const std::vector<T>& val){
-  if( fd == -1 ) error("serial port not opened");
  // TODO: Tell servo to set desired POSITION of each servo in 'ids' to each positon in 'val'
   
   uint8_t N = ids.size() % 0x100;
@@ -231,7 +308,6 @@ bool setVal(const std::vector<int>& ids, const ServoDriver::Parameter type, cons
 
 template<class T>
 bool getVal(const std::vector<int>& ids, const ServoDriver::Parameter type,  std::vector<T>& val){
-  if( fd == -1 ) error("serial port not opened");
  // TODO: Get POSITION of each servo in 'ids' and set 'val'
   
   uint8_t N = ids.size() % 0x100;
@@ -325,4 +401,3 @@ template<>
 bool ServoDriver::getVal<int>(const std::vector<int>& ids, const Parameter type, std::vector<int>& val){
   return ::getVal<int>(ids,type,val);
 }
-#include "arduino-serial-lib.c"
