@@ -1,5 +1,7 @@
 #include <math.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <iostream>
 
 #include "ServoDriver.h"
 
@@ -16,6 +18,9 @@ int main(int argc, char* argv[]){
     ids[i] = i+1;
   }
   ids[2] = 100;
+#ifndef NDEBUG
+  std::cout << "Using port: " << argv[1] << std::endl;
+#endif
   ServoDriver::init(argv[1],ids);
   
   typedef uint16_t ValueType;

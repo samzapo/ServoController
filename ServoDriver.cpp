@@ -6,7 +6,7 @@
 #include <unistd.h>   // for usleep()
 #include <assert.h>
 #include <sstream>
-
+#include <iostream>
 
 enum Inst{
   INST_PING       = 1   ,
@@ -42,63 +42,84 @@ uint8_t buf[buf_max];
 
 /////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Serial Handling ////////////////////////////
-#include <SerialPort.h>
+#include <SerialStream.h>
 #include <iostream>
 
-SerialPort * ardu;
+using namespace LibSerial ;
+
+SerialStream ardu ;
 
 void serialport_open(const char* sp){
-  /*The arduino must be setup to use the same baud rate*/ 
-  ardu = new SerialPort(sp);
-  ardu->Open(SerialPort::BAUD_9600, SerialPort::CHAR_SIZE_8);
+  /*The arduino must be setup to use the same baud rate*/
+  fprintf(stdout, "Setting Params:\n");
+  ardu.SetBaudRate( SerialStreamBuf::BAUD_115200 ) ;
+  ardu.SetCharSize( SerialStreamBuf::CHAR_SIZE_8 ) ;
+  ardu.SetNumOfStopBits(1) ;
+  ardu.SetParity( SerialStreamBuf::PARITY_ODD ) ;
+  ardu.SetFlowControl( SerialStreamBuf::FLOW_CONTROL_HARD ) ;
+  ardu.SetVTime(1);
+  fprintf(stdout, "Opening:\n");
+  ardu.Open( sp ) ;
+  fprintf(stdout, "Opened:\n");
+
 }
+
+void serialport_close(const char* sp){
+  /*The arduino must be setup to use the same baud rate*/
+  ardu.Close() ;
+}
+
 
 /* HEADER:
  *  REQUEST_TYPE, PARAMETER, N_IDS, L_SIZE
  */
+const int BUFFER_SIZE = 256 ;
+char input_buffer[BUFFER_SIZE] ;
+char output_buffer[BUFFER_SIZE] ;
 
 void Send(uint8_t * out_buf){
 #ifndef NDEBUG
   // Check Header
-  printf("Message header:\n");
+  fprintf(stdout, "Message header:\n");
   for (int i=0; i<HEADER_SIZE; i++) {
-    printf(" %02x",out_buf[i]);
+    fprintf(stdout, " %02x",out_buf[i]);
   }
-  printf("\n\n");
+  fprintf(stdout, "\n\n");
 #endif
   
   int N = out_buf[N_INDEX];
   int L = out_buf[L_INDEX]+1;
   
 #ifndef NDEBUG
-  printf("Message body:\n");
+  fprintf(stdout, "Message body:\n");
   for (int i=0;i<N; i++) {
     for (int j=0;j<L; j++) {
-      printf(" %02x",out_buf[HEADER_SIZE+i*L+j]);
+      fprintf(stdout, " %02x",out_buf[HEADER_SIZE+i*L+j]);
     }
-    printf("\n");
+    fprintf(stdout, "\n");
   }
-  printf("END\n");
+  fprintf(stdout, "END\n");
 #endif
   int message_size = HEADER_SIZE + N*L;
-  SerialPort::DataBuffer buf(out_buf, out_buf + sizeof(out_buf)/ sizeof(out_buf[0]));
-  ardu->Write(buf);
+  memcpy(output_buffer,out_buf,sizeof(uint8_t)*message_size);
+  ardu.write( output_buffer, message_size ) ;
+
 }
 
 void Recieve(uint8_t* in_buf){
   // Read Header
-  SerialPort::DataBuffer buf;
-  ardu->Read(buf, HEADER_SIZE, timeout);
+  ardu.read( input_buffer, HEADER_SIZE ) ;
   
   for (int i=0; i<HEADER_SIZE; i++)
-    in_buf[i] = buf[i];
+    memcpy(&in_buf[i],&input_buffer[i],sizeof(uint8_t));
+//    in_buf[i] = input_buffer[i];
 #ifndef NDEBUG
   // Check Header
-  printf("Message header:\n");
+  fprintf(stdout, "Message header:\n");
   for (int i=0; i<HEADER_SIZE; i++) {
-    printf(" %02x",in_buf[i]);
+    fprintf(stdout, " %02x",in_buf[i]);
   }
-  printf("\n\n");
+  fprintf(stdout, "\n\n");
 #endif
 
   int N = buf[N_INDEX];
@@ -106,25 +127,28 @@ void Recieve(uint8_t* in_buf){
   
   int nbytes_body = N * L;
 
-  ardu->Read(buf, nbytes_body, timeout);
+  ardu.read( input_buffer, nbytes_body ) ;
   for (int i=0; i<nbytes_body; i++)
-    in_buf[i+HEADER_SIZE] = buf[i];
+    memcpy(&in_buf[i+HEADER_SIZE],&input_buffer[i],sizeof(uint8_t));
+//    in_buf[i+HEADER_SIZE] = input_buffer[i];
 
 #ifndef NDEBUG
-  printf("Message body:\n");
+  fprintf(stdout, "Message body:\n");
   for (int i=0;i<N; i++) {
     for (int j=0;j<L; j++) {
-      printf(" %02x",in_buf[HEADER_SIZE+i*L+j]);
+      fprintf(stdout, " %02x",in_buf[HEADER_SIZE+i*L+j]);
     }
-    printf("\n");
+    fprintf(stdout, "\n");
   }
-  printf("END\n");
+  fprintf(stdout, "END\n");
 #endif
 }
 
 /// Fills 'ids' with ids of servos that are accessible
 bool ServoDriver::init(const char* sp,std::vector<int> ids){
-//  serialport_init(sp,115200);
+#ifndef NDEBUG
+  fprintf(stdout, "Opening: %s",sp);
+#endif
   serialport_open(sp);
   
   return true;
@@ -140,7 +164,7 @@ int serialport_init(const char* serialport, int baud)
   
   if (fd == -1)  {
     perror("serialport_init: Unable to open port ");
-    printf("serialport_init: Unable to open port %s",serialport);
+    fprintf(stdout, "serialport_init: Unable to open port %s",serialport);
     return -1;
   }
   
@@ -266,7 +290,7 @@ bool setVal(const std::vector<int>& ids, const ServoDriver::Parameter type, cons
   buf[3] = L;
   
 #ifndef NDEBUG
-  printf("Position:\n");
+  fprintf(stdout, "Position:\n");
 #endif
   for(int i=0;i<N;i++){
     uint8_t v[L];
@@ -279,27 +303,27 @@ bool setVal(const std::vector<int>& ids, const ServoDriver::Parameter type, cons
     }
     
 #ifndef NDEBUG
-//    printf("%d:  (%s) floating point:%f OR integer:%d --> %02x: ",ids[i],typeid(T).name(),val[i],val[i],i1);
+//    fprintf(stdout, "%d:  (%s) floating point:%f OR integer:%d --> %02x: ",ids[i],typeid(T).name(),val[i],val[i],i1);
     for(int j=0;j<L;j++)
-      printf(" %02x",buf[HEADER_SIZE + i*(L+1) + j + 1]);
-    printf("\n");
+      fprintf(stdout, " %02x",buf[HEADER_SIZE + i*(L+1) + j + 1]);
+    fprintf(stdout, "\n");
     
 #endif
   }
 #ifndef NDEBUG
-  printf("END\n");
+  fprintf(stdout, "END\n");
 #endif
   
   Send(buf);
   
 #ifndef NDEBUG
-  printf("Position (re-parsed):\n");
+  fprintf(stdout, "Position (re-parsed):\n");
   std::vector<T> val2(ids.size());
   data2vector<T>(buf,ids,val2);
   for(int i=0;i<ids.size();i++){
-//    printf("%d: (%s) floating point:%f OR integer:%d \n",ids[i],typeid(T).name(),val2[i],val2[i]);
+//    fprintf(stdout, "%d: (%s) floating point:%f OR integer:%d \n",ids[i],typeid(T).name(),val2[i],val2[i]);
   }
-  printf("END\n");
+  fprintf(stdout, "END\n");
 #endif
 
 
@@ -319,18 +343,18 @@ bool getVal(const std::vector<int>& ids, const ServoDriver::Parameter type,  std
   buf[3] = L;
   
 #ifndef NDEBUG
-  printf("Load:\n");
+  fprintf(stdout, "Load:\n");
 #endif
   for(int i=0;i<N;i++){
     uint8_t i1 = ids[i] % 0x100;
     buf[HEADER_SIZE + i*(L+1)]     = i1;
     
 #ifndef NDEBUG
-    printf("%d --> %02x\n",ids[i],i1);
+    fprintf(stdout, "%d --> %02x\n",ids[i],i1);
 #endif
   }
 #ifndef NDEBUG
-  printf("END\n");
+  fprintf(stdout, "END\n");
 #endif
   
   Send(buf);
