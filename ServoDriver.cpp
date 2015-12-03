@@ -7,25 +7,7 @@
 #include <assert.h>
 #include <sstream>
 
-enum Inst{
-  INST_PING       = 1   ,
-  INST_READ       = 2   ,
-  INST_WRITE      = 3   ,
-  INST_REG_WRITE  = 4   ,
-  INST_ACTION     = 5   ,
-  INST_RESET      = 6   ,
-  INST_SYNC_WRITE = 0x83
-};
-
-enum Inds{
- TYPE_INDEX      = 0,
- PARAMETER_INDEX = 1,
- N_INDEX         = 2,
- L_INDEX         = 3,
- HEADER_SIZE     = 4
-};
-
-
+using namespace ServoDriver;
 void error(char* msg)
 {
   fprintf(stderr, "%s\n",msg);
