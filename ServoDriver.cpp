@@ -14,13 +14,12 @@ void error(char* msg)
 //  exit(EXIT_FAILURE);
 }
 
-const int buf_max = 256*256;
+const int buf_max = 12*12;
 
 int fd = -1;
-int baudrate = 57600;  // default
+int baudrate = 115200;  // default
 uint8_t quiet=1;
 uint8_t eolchar = '\n';
-int timeout = 10;
 uint8_t buf[buf_max];
 int rc,n;
 
@@ -34,44 +33,44 @@ int rc,n;
  *  REQUEST_TYPE, PARAMETER, N_IDS, L_SIZE
  */
 
-void Send(uint8_t * out_buf){
+void Send(uint8_t * out_buf,int timeout = 10){
 #ifndef NDEBUG
   // Check Header
-  printf("Message header:\n");
+  fprintf(stdout, "Message header:\n");
   for (int i=0; i<HEADER_SIZE; i++) {
-    printf(" %02x",out_buf[i]);
+    fprintf(stdout, " %02x",out_buf[i]);
   }
-  printf("\n\n");
+  fprintf(stdout, "\n\n");
 #endif
   
   int N = out_buf[N_INDEX];
   int L = out_buf[L_INDEX]+1;
   
 #ifndef NDEBUG
-  printf("Message body:\n");
+  fprintf(stdout, "Message body:\n");
   for (int i=0;i<N; i++) {
     for (int j=0;j<L; j++) {
-      printf(" %02x",out_buf[HEADER_SIZE+i*L+j]);
+      fprintf(stdout, " %02x",out_buf[HEADER_SIZE+i*L+j]);
     }
-    printf("\n");
+    fprintf(stdout, "\n");
   }
-  printf("END\n");
+  fprintf(stdout, "END\n");
 #endif
   int message_size = HEADER_SIZE + N*L;
   rc = serialport_write(fd, out_buf,message_size);
 }
 
-void Recieve(uint8_t* in_buf){
+void Recieve(uint8_t* in_buf,int timeout = 10){
   // Read Header
   rc = serialport_read(fd, buf, HEADER_SIZE, buf_max, timeout);
   
 #ifndef NDEBUG
   // Check Header
-  printf("Message header:\n");
+  fprintf(stdout, "Message header:\n");
   for (int i=0; i<HEADER_SIZE; i++) {
-    printf(" %02x",buf[i]);
+    fprintf(stdout, " %02x",buf[i]);
   }
-  printf("\n\n");
+  fprintf(stdout, "\n\n");
 #endif
   
   int N = buf[N_INDEX];
@@ -82,14 +81,14 @@ void Recieve(uint8_t* in_buf){
   
   
 #ifndef NDEBUG
-  printf("Message body:\n");
+  fprintf(stdout, "Message body:\n");
   for (int i=0;i<N; i++) {
     for (int j=0;j<L; j++) {
-      printf(" %02x",buf[HEADER_SIZE+i*L+j]);
+      fprintf(stdout, " %02x",buf[HEADER_SIZE+i*L+j]);
     }
-    printf("\n");
+    fprintf(stdout, "\n");
   }
-  printf("END\n");
+  fprintf(stdout, "END\n");
 #endif
 }
 
@@ -98,11 +97,11 @@ bool ServoDriver::init(const char* sp,std::vector<int> ids){
   
   if( fd!=-1 ) {
     serialport_close(fd);
-    if(!quiet) printf("closed port %s\n");
+    if(!quiet) fprintf(stdout, "closed port %s\n");
   }
   fd = serialport_init(sp, baudrate);
   if( fd==-1 ) error("couldn't open port");
-  if(!quiet) printf("opened port %s\n",sp);
+  if(!quiet) fprintf(stdout, "opened port %s\n",sp);
   serialport_flush(fd);
   
   return true;
@@ -171,7 +170,7 @@ bool setVal(const std::vector<int>& ids, const ServoDriver::Parameter type, cons
   buf[3] = L;
   
 #ifndef NDEBUG
-  printf("Position:\n");
+  fprintf(stdout, "Position:\n");
 #endif
   for(int i=0;i<N;i++){
     uint8_t v[L];
@@ -184,27 +183,27 @@ bool setVal(const std::vector<int>& ids, const ServoDriver::Parameter type, cons
     }
     
 #ifndef NDEBUG
-//    printf("%d:  (%s) floating point:%f OR integer:%d --> %02x: ",ids[i],typeid(T).name(),val[i],val[i],i1);
+//    fprintf(stdout, "%d:  (%s) floating point:%f OR integer:%d --> %02x: ",ids[i],typeid(T).name(),val[i],val[i],i1);
     for(int j=0;j<L;j++)
-      printf(" %02x",buf[HEADER_SIZE + i*(L+1) + j + 1]);
-    printf("\n");
+      fprintf(stdout, " %02x",buf[HEADER_SIZE + i*(L+1) + j + 1]);
+    fprintf(stdout, "\n");
     
 #endif
   }
 #ifndef NDEBUG
-  printf("END\n");
+  fprintf(stdout, "END\n");
 #endif
   
   Send(buf);
   
 #ifndef NDEBUG
-  printf("Position (re-parsed):\n");
+  fprintf(stdout, "Position (re-parsed):\n");
   std::vector<T> val2(ids.size());
   data2vector<T>(buf,ids,val2);
   for(int i=0;i<ids.size();i++){
-//    printf("%d: (%s) floating point:%f OR integer:%d \n",ids[i],typeid(T).name(),val2[i],val2[i]);
+//    fprintf(stdout, "%d: (%s) floating point:%f OR integer:%d \n",ids[i],typeid(T).name(),val2[i],val2[i]);
   }
-  printf("END\n");
+  fprintf(stdout, "END\n");
 #endif
 
 
@@ -225,18 +224,18 @@ bool getVal(const std::vector<int>& ids, const ServoDriver::Parameter type,  std
   buf[3] = L;
   
 #ifndef NDEBUG
-  printf("Load:\n");
+  fprintf(stdout, "Load:\n");
 #endif
   for(int i=0;i<N;i++){
     uint8_t i1 = ids[i] % 0x100;
     buf[HEADER_SIZE + i*(L+1)]     = i1;
     
 #ifndef NDEBUG
-    printf("%d --> %02x\n",ids[i],i1);
+    fprintf(stdout, "%d --> %02x\n",ids[i],i1);
 #endif
   }
 #ifndef NDEBUG
-  printf("END\n");
+  fprintf(stdout, "END\n");
 #endif
   
   Send(buf);
@@ -248,6 +247,30 @@ bool getVal(const std::vector<int>& ids, const ServoDriver::Parameter type,  std
   
   return true;
 }
+
+bool ServoDriver::ping(){
+  if( fd == -1 ) error("serial port not opened");
+  // TODO: Get POSITION of each servo in 'ids' and set 'val'
+  
+  uint8_t N = 0;
+  const uint8_t L = 0x00;
+  
+  buf[0] = INST_PING ;
+  buf[1] = P_EMPTY;
+  buf[2] = N;
+  buf[3] = L;
+  
+  Send(buf);
+  
+  // Write Header
+  rc = serialport_read(fd, buf, 1, 1, 1000);
+  
+  fprintf(stdout, "Response: %d\n",buf[0]);
+  assert(buf[0] == 1);
+  
+  return true;
+}
+
 
 //////////////////////////////////////////////////////////////////////////////
 // Template specializations so I can put the big templated function in here //

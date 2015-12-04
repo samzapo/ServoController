@@ -4,12 +4,12 @@
 #include <vector>
 namespace ServoDriver{
   const uint8_t
-  INST_PING       = 0   ,
   INST_READ       = 1   ,
   INST_WRITE      = 2   ,
   INST_REG_WRITE  = 3   ,
   INST_ACTION     = 4   ,
   INST_RESET      = 5   ,
+  INST_PING       = 6   ,
   INST_SYNC_WRITE = 0x83;
   
   // INFO
@@ -23,6 +23,7 @@ namespace ServoDriver{
   
   // PARAMETER
   const uint8_t
+  P_EMPTY     = 0,
   P_POSITION  = 1,
   P_VELOCITY  = 2,
   P_LOAD      = 3,
@@ -35,6 +36,8 @@ namespace ServoDriver{
   
   template <class T>
   bool setVal(const std::vector<int>& ids, const Parameter type, const std::vector<T>& val);
+  
+  bool ping();
 }
 
 #endif // __SERVO_DRIVER_H__

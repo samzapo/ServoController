@@ -22,6 +22,9 @@ int main(int argc, char* argv[]){
   
   double t = 0.0;
 
+  while(t<5.0){
+    ServoDriver::ping();
+  }
   // Use position controller
   while(t<5.0){
     std::vector<ValueType> pos(ids.size());
