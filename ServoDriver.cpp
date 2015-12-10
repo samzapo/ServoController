@@ -8,7 +8,6 @@
 #include <assert.h>
 #include <sstream>
 
-using namespace ServoDriver;
 void error(char* msg)
 {
   fprintf(stderr, "%s\n",msg);
@@ -88,9 +87,31 @@ void Recieve(uint8_t* in_buf,int timeout = 10){
   fprintf(stdout, "\n");
 #endif
 }
+bool ping(){
+  if( fd == -1 ) error("serial port not opened");
+  // TODO: Get POSITION of each servo in 'ids' and set 'val'
+  
+  uint8_t N = 0;
+  const uint8_t L = 0x00;
+  
+  uint8_t buf[buf_max*buf_max];
+  buf[0] = INST_PING ;
+  buf[1] = P_EMPTY;
+  buf[2] = N;
+  buf[3] = L;
+  
+  Send(buf);
+  
+  uint8_t in_buf[buf_max*buf_max];
+  Recieve(in_buf);
+  
+  assert(in_buf[4] == 1);
+  
+  return true;
+}
 
 /// Fills 'ids' with ids of servos that are accessible
-bool ServoDriver::init(const char* sp,std::vector<int> ids){
+bool init(const char* sp,std::vector<int> ids){
   
   if( fd!=-1 ) {
     serialport_close(fd);
@@ -162,8 +183,9 @@ void data2vecvec(const uint8_t * in_buf,const std::vector<int>& ids,std::vector<
 /////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Control Handling ////////////////////////////
 
+namespace LocalTemplatedFcn {
 template<class T>
-bool setVal(const std::vector<int>& ids, const ServoDriver::Parameter type, const std::vector<T>& val){
+bool setVal(const std::vector<int>& ids, const Parameter type, const std::vector<T>& val){
   if( fd == -1 ) error("serial port not opened");
  // TODO: Tell servo to set desired POSITION of each servo in 'ids' to each positon in 'val'
   
@@ -187,13 +209,11 @@ bool setVal(const std::vector<int>& ids, const ServoDriver::Parameter type, cons
   std::vector<T> val2(ids.size());
   data2vector<T>(buf,ids,val2);
 
-
-
   return true;
 }
 
 template<class T>
-bool getVal(const std::vector<int>& ids, const ServoDriver::Parameter type,  std::vector<T>& val){
+bool getVal(const std::vector<int>& ids, const Parameter type,  std::vector<T>& val){
   if( fd == -1 ) error("serial port not opened");
  // TODO: Get POSITION of each servo in 'ids' and set 'val'
   
@@ -220,87 +240,62 @@ bool getVal(const std::vector<int>& ids, const ServoDriver::Parameter type,  std
   
   return true;
 }
+}
 
-bool ServoDriver::ping(){
-  if( fd == -1 ) error("serial port not opened");
-  // TODO: Get POSITION of each servo in 'ids' and set 'val'
+  template<>
+  bool setVal<uint16_t>(const std::vector<int>& ids, const Parameter type, const std::vector<uint16_t>& val){
+    return LocalTemplatedFcn::setVal<uint16_t>(ids,type,val);
+  }
   
-  uint8_t N = 0;
-  const uint8_t L = 0x00;
+  template<>
+  bool getVal<uint16_t>(const std::vector<int>& ids, const Parameter type, std::vector<uint16_t>& val){
+    return LocalTemplatedFcn::getVal<uint16_t>(ids,type,val);
+  }
   
-  uint8_t buf[buf_max*buf_max];
-  buf[0] = INST_PING ;
-  buf[1] = P_EMPTY;
-  buf[2] = N;
-  buf[3] = L;
+  // CHAR
+  template<>
+  bool setVal<uint8_t>(const std::vector<int>& ids, const Parameter type, const std::vector<uint8_t>& val){
+    return LocalTemplatedFcn::setVal<uint8_t>(ids,type,val);
+  }
   
-  Send(buf);
+  template<>
+  bool getVal<uint8_t>(const std::vector<int>& ids, const Parameter type, std::vector<uint8_t>& val){
+    return LocalTemplatedFcn::getVal<uint8_t>(ids,type,val);
+  }
   
-  uint8_t in_buf[buf_max*buf_max];
-  Recieve(in_buf);
   
-  assert(in_buf[4] == 1);
+  // FLOAT (32 bit)
+  template<>
+  bool setVal<float>(const std::vector<int>& ids, const Parameter type, const std::vector<float>& val){
+    return LocalTemplatedFcn::setVal<float>(ids,type,val);
+  }
   
-  return true;
-}
+  template<>
+  bool getVal<float>(const std::vector<int>& ids, const Parameter type, std::vector<float>& val){
+    return LocalTemplatedFcn::getVal<float>(ids,type,val);
+  }
+  
+  // DOUBLE (64 bit)
+  template<>
+  bool setVal<double>(const std::vector<int>& ids, const Parameter type, const std::vector<double>& val){
+    return LocalTemplatedFcn::setVal<double>(ids,type,val);
+  }
+  
+  template<>
+  bool getVal<double>(const std::vector<int>& ids, const Parameter type, std::vector<double>& val){
+    return LocalTemplatedFcn::getVal<double>(ids,type,val);
+  }
+  
+  // INT (32 bit)
+  template<>
+  bool setVal<int>(const std::vector<int>& ids, const Parameter type, const std::vector<int>& val){
+    return LocalTemplatedFcn::setVal<int>(ids,type,val);
+  }
+  
+  template<>
+  bool getVal<int>(const std::vector<int>& ids, const Parameter type, std::vector<int>& val){
+    return LocalTemplatedFcn::getVal<int>(ids,type,val);
+  }
 
 
-//////////////////////////////////////////////////////////////////////////////
-// Template specializations so I can put the big templated function in here //
-
-// SHORT
-template<>
-bool ServoDriver::setVal<uint16_t>(const std::vector<int>& ids, const Parameter type, const std::vector<uint16_t>& val){
-  return ::setVal<uint16_t>(ids,type,val);
-}
-
-template<>
-bool ServoDriver::getVal<uint16_t>(const std::vector<int>& ids, const Parameter type, std::vector<uint16_t>& val){
-  return ::getVal<uint16_t>(ids,type,val);
-}
-
-// CHAR
-template<>
-bool ServoDriver::setVal<uint8_t>(const std::vector<int>& ids, const Parameter type, const std::vector<uint8_t>& val){
-  return ::setVal<uint8_t>(ids,type,val);
-}
-
-template<>
-bool ServoDriver::getVal<uint8_t>(const std::vector<int>& ids, const Parameter type, std::vector<uint8_t>& val){
-  return ::getVal<uint8_t>(ids,type,val);
-}
-
-
-// FLOAT (32 bit)
-template<>
-bool ServoDriver::setVal<float>(const std::vector<int>& ids, const Parameter type, const std::vector<float>& val){
-  return ::setVal<float>(ids,type,val);
-}
-
-template<>
-bool ServoDriver::getVal<float>(const std::vector<int>& ids, const Parameter type, std::vector<float>& val){
-  return ::getVal<float>(ids,type,val);
-}
-
-// DOUBLE (64 bit)
-template<>
-bool ServoDriver::setVal<double>(const std::vector<int>& ids, const Parameter type, const std::vector<double>& val){
-  return ::setVal<double>(ids,type,val);
-}
-
-template<>
-bool ServoDriver::getVal<double>(const std::vector<int>& ids, const Parameter type, std::vector<double>& val){
-  return ::getVal<double>(ids,type,val);
-}
-
-// INT (32 bit)
-template<>
-bool ServoDriver::setVal<int>(const std::vector<int>& ids, const Parameter type, const std::vector<int>& val){
-  return ::setVal<int>(ids,type,val);
-}
-
-template<>
-bool ServoDriver::getVal<int>(const std::vector<int>& ids, const Parameter type, std::vector<int>& val){
-  return ::getVal<int>(ids,type,val);
-}
 #include "arduino-serial-lib.c"

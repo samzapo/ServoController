@@ -2,7 +2,7 @@
 #define __SERVO_DRIVER_H__
 
 #include <vector>
-namespace ServoDriver{
+#include <stdint.h>
   const uint8_t
   INST_READ       = 1   ,
   INST_WRITE      = 2   ,
@@ -38,6 +38,5 @@ namespace ServoDriver{
   bool setVal(const std::vector<int>& ids, const Parameter type, const std::vector<T>& val);
   
   bool ping();
-}
 
 #endif // __SERVO_DRIVER_H__

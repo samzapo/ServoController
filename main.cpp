@@ -1,5 +1,6 @@
 #include <math.h>
 #include <unistd.h>
+#include <stdio.h>
 
 #include "ServoDriver.h"
 
@@ -16,11 +17,11 @@ int main(int argc, char* argv[]){
     ids[i] = i+1;
   }
   ids[1] = 100;
-  ServoDriver::init(argv[1],ids);
+  init(argv[1],ids);
   
   typedef uint16_t ValueType;
   
-  ServoDriver::ping();
+//  ping();
   
   double t = 0.0;
 
@@ -31,7 +32,7 @@ int main(int argc, char* argv[]){
       pos[i] = (ValueType) (2*1024 + 0.1*1024.0*sin(t*2.0*M_PI));
     }
     
-    ServoDriver::getVal<ValueType>(ids,ServoDriver::P_POSITION,pos);
+    getVal<ValueType>(ids,P_POSITION,pos);
     usleep(10000);
     t += 0.001;
   }
@@ -45,9 +46,9 @@ int main(int argc, char* argv[]){
       pos[i] = (ValueType) (1024 + 0.1*1024.0*sin(t*2.0*M_PI));
     }
     
-    ServoDriver::setVal<ValueType>(ids,ServoDriver::P_LOAD,pos);
-    ServoDriver::getVal<ValueType>(ids,ServoDriver::P_POSITION,pos);
-    ServoDriver::getVal<ValueType>(ids,ServoDriver::P_VELOCITY,vel);
+    setVal<ValueType>(ids,P_LOAD,pos);
+    getVal<ValueType>(ids,P_POSITION,pos);
+    getVal<ValueType>(ids,P_VELOCITY,vel);
     printf("|    POS    |    VEL    |\n");
     for(int i=0;i<ids.size();i++)
      printf("|  %7d  |  %7d  |\n",pos[i],vel[i]);

@@ -33,3 +33,5 @@ add_executable(ServoController-Test ServoDriver.cpp main.cpp)
 
 # install include dirs
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ServoController DESTINATION include)
+
+add_executable(simple-test simple-test.cpp)

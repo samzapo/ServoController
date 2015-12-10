@@ -1,12 +1,6 @@
-//
-// arduino-serial-lib -- simple library for reading/writing serial ports
-//
-// 2006-2013, Tod E. Kurt, http://todbot.com/blog/
-//
-
-#include "arduino-serial-lib.h"
-
 #include <stdio.h>    // Standard input/output definitions 
+#include <stdint.h>    // uint*_t defs 
+
 #include <unistd.h>   // UNIX standard function definitions 
 #include <fcntl.h>    // File control definitions 
 #include <errno.h>    // Error number definitions 
@@ -14,15 +8,11 @@
 #include <string.h>   // String function definitions 
 #include <sys/ioctl.h>
 
-// uncomment this to debug reads
-//#define SERIALPORTDEBUG 
-
-// takes the string name of the serial port (e.g. "/dev/tty.usbserial","COM1")
-// and a baud rate (bps) and connects to that port at that speed and 8N1.
-// opens the port in fully raw mode so you can send binary data.
-// returns valid fd, or -1 on error
-int serialport_init(const char* serialport, int baud)
+int main(int argc, char* argv[])
 {
+  const char* serialport = "/dev/ttyUSB0";
+  int baud = 115200; 
+  int fd;
   speed_t brate = baud; // let you override switch below if needed
   switch(baud) {
     case 4800:   brate=B4800;   break;
@@ -39,13 +29,11 @@ int serialport_init(const char* serialport, int baud)
     case 115200: brate=B115200; break;
   }
   
-#define ONE_METHOD
-#ifdef ONE_METHOD
+#ifndef ONE_METHOD
   struct termios toptions;
-  int fd;
   
-  //fd = open(serialport, O_RDWR | O_NOCTTY | O_NDELAY);
-  fd = open(serialport, O_RDWR | O_NONBLOCK );
+  fd = open(serialport, O_RDWR | O_NOCTTY | O_NDELAY);
+  //fd = open(serialport, O_RDWR | O_NONBLOCK );
   
   if (fd == -1)  {
     perror("serialport_init: Unable to open port ");
@@ -91,12 +79,10 @@ int serialport_init(const char* serialport, int baud)
     return -1;
   }
   
-  return fd;
 #else
-  int fd;
   
   /* Open the file descriptor in non-blocking mode */
-  fd = open(serialport, O_RDWR | O_NOCTTY);
+  fd = open(serialport, O_RDWR | O_NOCTTY | O_NONBLOCK );
   
   /* Set up the control structure */
   struct termios toptions;
@@ -140,90 +126,16 @@ int serialport_init(const char* serialport, int baud)
   /* Flush anything already in the serial buffer */
   tcflush(fd, TCIFLUSH);
   
-  return fd;
-#endif
-}
-
-//
-int serialport_close( int fd )
-{
-    return close( fd );
-}
-
-//
-int serialport_writebyte( int fd, uint8_t b)
-{
-    int n = write(fd,&b,1);
-    if( n!=1)
-        return -1;
-    return 0;
-}
-
-//
-int serialport_write(int fd, const uint8_t* str, int len )
-{
-  if (len < 1) {
-    printf("serialport_write: couldn't write buffer of size %d\n",len);
-    exit(1);
-  }
-    int n = write(fd, str, len);
-    if( n!=len ) {
-        printf("serialport_write: couldn't write string: '%s'\n",str);
-        perror("serialport_write: couldn't write whole string\n");
-        return -1;
-    }
-    return 0;
-}
-
-//
-int serialport_read_until(int fd, uint8_t* buf, uint8_t until, int buf_max, int timeout)
-{
-#ifdef SERIALPORTDEBUG
- printf("serialport_read_until(fd = %d,uint8_t*,until = %02x, buf_max = %d, timeout = %d)\n",fd,until,buf_max,timeout);
 #endif
 
-    uint8_t b[1];  // read expects an array, so we give it a 1-byte array
-    int i=0;
-    do { 
-        int n = read(fd, b, 1);  // read a uint8_t at a time
-        if( n==-1) return -1;    // couldn't read
-        if( n==0 ) {
-            usleep( 1 * 1000 );  // wait 1 msec try again
-            timeout--;
-            continue;
-        }
-#ifdef SERIALPORTDEBUG  
-        printf("serialport_read_until: i=%d, n=%d b='%c'\n",i,n,b[0]); // debug
-#endif
-      fprintf(stdout,"%02x ",b[0]);
-        buf[i] = b[0];
-        i++;
-    } while( b[0] != until && i < buf_max && timeout>0 );
-
-    buf[i] = 0;  // null terminate the string
-    return 0;
-}
-
-int serialport_read(int fd, uint8_t* buf, int nbytes, int buf_max,int timeout){
-#ifdef SERIALPORTDEBUG
-  printf("serialport_read(fd = %d,uint8_t*, buf_max = %d, timeout = %d)\n",fd,buf_max,timeout);
-#endif
+  uint8_t b[4] = {0x06, 0x00, 0x00, 0x00};
+  int n1 = write(fd,&b,4);
   
-  int n = read(fd, buf, nbytes);
-#ifdef SERIALPORTDEBUG
-  printf("%i bytes got read...\n", n);
-  // print what's in the buffer 
-  printf("Buffer contains...\n%s\n", buf);
-#endif
-  
-  assert(n!=-1);    // couldn't read at all
-  assert(n!=nbytes);// couldn't read desired number of bytes
-  return n;
-}
 
-//
-int serialport_flush(int fd)
-{
-    sleep(2); //required to make flush work, for some reason
-    return tcflush(fd, TCIOFLUSH);
+  uint8_t b_in[1] = {0x00};
+  int n0 = read(fd,&b_in, 1);  // read a uint8_t at a time
+
+  printf("%02x ",b_in[0]);
+
+  return close( fd );
 }
