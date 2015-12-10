@@ -15,16 +15,15 @@ int main(int argc, char* argv[]){
   for(int i=0;i<ids.size();i++){
     ids[i] = i+1;
   }
-  ids[2] = 100;
+  ids[1] = 100;
   ServoDriver::init(argv[1],ids);
   
   typedef uint16_t ValueType;
   
+  ServoDriver::ping();
+  
   double t = 0.0;
 
-  while(t<5.0){
-    ServoDriver::ping();
-  }
   // Use position controller
   while(t<5.0){
     std::vector<ValueType> pos(ids.size());
@@ -32,8 +31,8 @@ int main(int argc, char* argv[]){
       pos[i] = (ValueType) (2*1024 + 0.1*1024.0*sin(t*2.0*M_PI));
     }
     
-    ServoDriver::setVal<ValueType>(ids,ServoDriver::P_POSITION,pos);
-    usleep(1000);
+    ServoDriver::getVal<ValueType>(ids,ServoDriver::P_POSITION,pos);
+    usleep(10000);
     t += 0.001;
   }
   
@@ -53,7 +52,7 @@ int main(int argc, char* argv[]){
     for(int i=0;i<ids.size();i++)
      printf("|  %7d  |  %7d  |\n",pos[i],vel[i]);
     printf("\n");
-    usleep(1000);
+    usleep(10000);
     t += 0.001;
   }
 
