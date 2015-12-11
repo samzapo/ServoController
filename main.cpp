@@ -21,10 +21,10 @@ int main(int argc, char* argv[]){
   
   typedef uint16_t ValueType;
   
-//  ping();
+  ping();
   
   double t = 0.0;
-
+/*
   // Use position controller
   while(t<5.0){
     std::vector<ValueType> pos(ids.size());
@@ -36,7 +36,7 @@ int main(int argc, char* argv[]){
     usleep(10000);
     t += 0.001;
   }
-  
+  */
 
   // Use torque controller
   t = 0.0;
@@ -46,7 +46,7 @@ int main(int argc, char* argv[]){
       pos[i] = (ValueType) (1024 + 0.1*1024.0*sin(t*2.0*M_PI));
     }
     
-    setVal<ValueType>(ids,P_LOAD,pos);
+//    setVal<ValueType>(ids,P_LOAD,pos);
     getVal<ValueType>(ids,P_POSITION,pos);
     getVal<ValueType>(ids,P_VELOCITY,vel);
     printf("|    POS    |    VEL    |\n");

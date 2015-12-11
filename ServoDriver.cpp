@@ -24,8 +24,10 @@ int rc,n;
 
 /////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Serial Handling ////////////////////////////
-#include "arduino-serial-lib.h"
 
+extern "C" {
+#include "arduino-serial-lib.h"
+}
 
 /* HEADER:
  *  REQUEST_TYPE, PARAMETER, N_IDS, L_SIZE
@@ -53,15 +55,37 @@ void Send(uint8_t * out_buf,int timeout = 10){
   }
   fprintf(stdout, "\n");
 #endif
-  int message_size = HEADER_SIZE + N*L;
+  int message_size = HEADER_SIZE + N*(L+1);
+//  for (int i=0; i<message_size; i++) {
+//    rc = serialport_writebyte(fd, out_buf[i]);
+//  }
   rc = serialport_write(fd, out_buf,message_size);
+
 }
 
-void Recieve(uint8_t* in_buf,int timeout = 10){
+int recieve_nbytes(uint8_t* in_buf,int nbytes,int timeout = 10){
+  int rc_total = 0;
+  while (rc_total != nbytes) {
+    int recieved = 0;
+    while (recieved < 1) {
+      recieved = serialport_read(fd, in_buf, nbytes-rc_total, timeout);
+#ifndef NDEBUG
+      fprintf(stdout, "Received this time: %d\n",recieved);
+      fprintf(stdout, "Need %d more bytes\n",nbytes-rc_total);
+#endif
+    }
+    rc_total += recieved;
+#ifndef NDEBUG
+    fprintf(stdout, "Received [%d] so far, out of [%d] \n",rc_total,nbytes);
+#endif
+  }
+}
+
+void Recieve(uint8_t* in_buf,const uint8_t * out_buf,int timeout = 10){
   fprintf(stdout, "Recieve:\n");
 
   // Read Header
-  rc = serialport_read(fd, in_buf, HEADER_SIZE, buf_max, timeout);
+  recieve_nbytes(in_buf,HEADER_SIZE,timeout);
   
 #ifndef NDEBUG
   for (int i=0; i<HEADER_SIZE; i++) {
@@ -74,8 +98,8 @@ void Recieve(uint8_t* in_buf,int timeout = 10){
   int L = in_buf[L_INDEX];
   
   int nbytes_body = N * (L+1);
-  rc = serialport_read(fd, &in_buf[HEADER_SIZE], nbytes_body, buf_max-HEADER_SIZE, timeout);
   
+  recieve_nbytes(&in_buf[HEADER_SIZE],nbytes_body,timeout);
   
 #ifndef NDEBUG
   for (int i=0;i<N; i++) {
@@ -86,28 +110,11 @@ void Recieve(uint8_t* in_buf,int timeout = 10){
   }
   fprintf(stdout, "\n");
 #endif
-}
-bool ping(){
-  if( fd == -1 ) error("serial port not opened");
-  // TODO: Get POSITION of each servo in 'ids' and set 'val'
   
-  uint8_t N = 0;
-  const uint8_t L = 0x00;
-  
-  uint8_t buf[buf_max*buf_max];
-  buf[0] = INST_PING ;
-  buf[1] = P_EMPTY;
-  buf[2] = N;
-  buf[3] = L;
-  
-  Send(buf);
-  
-  uint8_t in_buf[buf_max*buf_max];
-  Recieve(in_buf);
-  
-  assert(in_buf[4] == 1);
-  
-  return true;
+  for (int i=0; i<3; i++) {
+    if(out_buf[i] != in_buf[i])
+      serialport_flush(fd);
+  }
 }
 
 /// Fills 'ids' with ids of servos that are accessible
@@ -115,11 +122,12 @@ bool init(const char* sp,std::vector<int> ids){
   
   if( fd!=-1 ) {
     serialport_close(fd);
-    if(!quiet) fprintf(stdout, "closed port %s\n");
+    if(!quiet) fprintf(stdout, "closed port %s\n",sp);
   }
   fd = serialport_init(sp, baudrate);
   if( fd==-1 ) error("couldn't open port");
   if(!quiet) fprintf(stdout, "opened port %s\n",sp);
+  
   serialport_flush(fd);
   
   return true;
@@ -134,7 +142,7 @@ void data2vector(const uint8_t * in_buf,const std::vector<int>& ids,std::vector<
   
   int N = in_buf[N_INDEX];
   int size_of_values = sizeof(T);
-  int L = size_of_values;//in_buf[L_INDEX];
+  int L = in_buf[L_INDEX];
   fprintf(stdout, "Parsing Message:\n");
   fprintf(stdout, "N: %02x\n",N);
   fprintf(stdout, "L: %02x\n",L);
@@ -164,14 +172,14 @@ void data2vecvec(const uint8_t * in_buf,const std::vector<int>& ids,std::vector<
   std::vector<T> val_array[0xFF];
   
   int N = in_buf[N_INDEX];
-  int L = in_buf[L_INDEX]+1;
+  int L = in_buf[L_INDEX];
   int size_of_values = sizeof(T);
   
   // For now we only do single values
-  int num_vals_per_id = (L-1) / size_of_values ;
+  int num_vals_per_id = L / size_of_values ;
   for (int i=0;i<N; i++) {
     for (int j=0,k=0;j<num_vals_per_id; j+=size_of_values,k+=1) {
-      val_array[in_buf[HEADER_SIZE+i*L]].push_back(*( (T*) &in_buf[HEADER_SIZE+i*L+1+j]));
+      val_array[in_buf[HEADER_SIZE+i*(L+1)]].push_back(*( (T*) &in_buf[HEADER_SIZE+i*(L+1)+1+j]));
     }
   }
 
@@ -234,12 +242,38 @@ bool getVal(const std::vector<int>& ids, const Parameter type,  std::vector<T>& 
   Send(buf);
   
   uint8_t in_buf[buf_max*buf_max];
-  Recieve(in_buf);
+  Recieve(in_buf,buf);
   
   data2vector<T>(in_buf,ids,val);
   
   return true;
 }
+  
+ 
+}
+
+bool ping(){
+  if( fd == -1 ) error("serial port not opened");
+  // TODO: Get POSITION of each servo in 'ids' and set 'val'
+  
+  uint8_t N = 0;
+  const uint8_t L = 0x00;
+  
+  uint8_t buf[buf_max*buf_max];
+  buf[0] = INST_PING ;
+  buf[1] = 0x00;
+  buf[2] = 0x01;
+  buf[3] = 0x00;
+  buf[4] = 0x01;
+  
+  Send(buf);
+  
+  uint8_t in_buf[buf_max*buf_max];
+  Recieve(in_buf,buf);
+  
+  assert(in_buf[4] == 1);
+  
+  return true;
 }
 
   template<>
@@ -296,6 +330,3 @@ bool getVal(const std::vector<int>& ids, const Parameter type,  std::vector<T>& 
   bool getVal<int>(const std::vector<int>& ids, const Parameter type, std::vector<int>& val){
     return LocalTemplatedFcn::getVal<int>(ids,type,val);
   }
-
-
-#include "arduino-serial-lib.c"
