@@ -17,7 +17,6 @@ void error(char* msg)
 const int buf_max = 0xFF;
 
 int fd = -1;
-int baudrate = 115200;  // default
 uint8_t quiet=1;
 int rc,n;
 
@@ -118,7 +117,7 @@ void Recieve(uint8_t* in_buf,const uint8_t * out_buf,int timeout = 10){
 }
 
 /// Fills 'ids' with ids of servos that are accessible
-bool init(const char* sp,std::vector<int> ids){
+bool init(const char* sp,int baudrate,std::vector<int> ids){
   
   if( fd!=-1 ) {
     serialport_close(fd);
@@ -214,8 +213,8 @@ bool setVal(const std::vector<int>& ids, const Parameter type, const std::vector
   
   Send(buf);
   
-  std::vector<T> val2(ids.size());
-  data2vector<T>(buf,ids,val2);
+//  std::vector<T> val2(ids.size());
+//  data2vector<T>(buf,ids,val2);
 
   return true;
 }
@@ -248,8 +247,6 @@ bool getVal(const std::vector<int>& ids, const Parameter type,  std::vector<T>& 
   
   return true;
 }
-  
- 
 }
 
 bool ping(){

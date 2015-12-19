@@ -1,6 +1,7 @@
 #include <math.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "ServoDriver.h"
 
@@ -12,47 +13,44 @@
  */
 
 int main(int argc, char* argv[]){
-  std::vector<int> ids(12);
+  std::vector<int> ids(1);
   for(int i=0;i<ids.size();i++){
-    ids[i] = i+1;
+    ids[i] = i;
   }
-  ids[1] = 100;
-  init(argv[1],ids);
+  init(argv[1],atoi(argv[2]),ids);
   
   typedef uint16_t ValueType;
   
-  ping();
+//  ping();
   
-  double t = 0.0;
-/*
-  // Use position controller
-  while(t<5.0){
-    std::vector<ValueType> pos(ids.size());
-    for(int i=0;i<ids.size();i++){
-      pos[i] = (ValueType) (2*1024 + 0.1*1024.0*sin(t*2.0*M_PI));
-    }
-    
-    getVal<ValueType>(ids,P_POSITION,pos);
-    usleep(10000);
-    t += 0.001;
-  }
-  */
-
+//  double t = 0.0;
+//  // Use position controller
+//  while(t<5.0){
+//    std::vector<ValueType> pos(ids.size());
+//    for(int i=0;i<ids.size();i++){
+//      pos[i] = (ValueType) (2*1024 + 0.1*1024.0*sin(t*2.0*M_PI));
+//    }
+//    
+//    getVal<ValueType>(ids,P_POSITION,pos);
+//    usleep(10000);
+//    t += 0.001;
+//  }
+//
   // Use torque controller
-  t = 0.0;
+  double t = 0.0;
   while(t<5.0){
     std::vector<ValueType> pos(ids.size()), vel(ids.size());
     for(int i=0;i<ids.size();i++){
       pos[i] = (ValueType) (1024 + 0.1*1024.0*sin(t*2.0*M_PI));
     }
     
-//    setVal<ValueType>(ids,P_LOAD,pos);
-    getVal<ValueType>(ids,P_POSITION,pos);
-    getVal<ValueType>(ids,P_VELOCITY,vel);
-    printf("|    POS    |    VEL    |\n");
-    for(int i=0;i<ids.size();i++)
-     printf("|  %7d  |  %7d  |\n",pos[i],vel[i]);
-    printf("\n");
+    setVal<ValueType>(ids,P_POSITION,pos);
+//    getVal<ValueType>(ids,P_POSITION,pos);
+//    getVal<ValueType>(ids,P_VELOCITY,vel);
+//    printf("|    POS    |    VEL    |\n");
+//    for(int i=0;i<ids.size();i++)
+//     printf("|  %7d  |  %7d  |\n",pos[i],vel[i]);
+//    printf("\n");
     usleep(10000);
     t += 0.001;
   }

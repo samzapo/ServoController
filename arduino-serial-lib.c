@@ -87,6 +87,8 @@ int serialport_init(const char* serialport, int baud)
     return -1;
   }
   
+  usleep(1000 * 1000);
+  
   return fd;
 }
 

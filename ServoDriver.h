@@ -29,7 +29,7 @@
   P_LOAD      = 3,
   P_SPECIAL   = 4;
   
-  bool init(const char* sp,std::vector<int> ids);
+  bool init(const char* sp,int baud,std::vector<int> ids);
   
   template <class T>
   bool getVal(const std::vector<int>& ids, const Parameter type, std::vector<T>& val);
