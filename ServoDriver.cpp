@@ -7,6 +7,11 @@
 #include <unistd.h>   // for usleep()
 #include <assert.h>
 #include <sstream>
+#include <math.h>
+
+
+#define println(str) std::cerr << str<< std::endl
+#define print(str)   std::cerr << str
 
 void error(char* msg)
 {
@@ -28,96 +33,8 @@ extern "C" {
 #include "arduino-serial-lib.h"
 }
 
-/* HEADER:
- *  REQUEST_TYPE, PARAMETER, N_IDS, L_SIZE
- */
-
-void Send(uint8_t * out_buf,int timeout = 10){
-  fprintf(stdout, "Send:\n");
-#ifndef NDEBUG
-  // Check Header
-  for (int i=0; i<HEADER_SIZE; i++) {
-    fprintf(stdout, "%02x ",out_buf[i]);
-  }
-  fprintf(stdout, "\n");
-#endif
-  
-  int N = out_buf[N_INDEX];
-  int L = out_buf[L_INDEX];
-  
-#ifndef NDEBUG
-  for (int i=0;i<N; i++) {
-    for (int j=0;j<L+1; j++) {
-      fprintf(stdout, "%02x ",out_buf[HEADER_SIZE+i*(L+1)+j]);
-    }
-    fprintf(stdout, "   ");
-  }
-  fprintf(stdout, "\n");
-#endif
-  int message_size = HEADER_SIZE + N*(L+1);
-//  for (int i=0; i<message_size; i++) {
-//    rc = serialport_writebyte(fd, out_buf[i]);
-//  }
-  rc = serialport_write(fd, out_buf,message_size);
-
-}
-
-int recieve_nbytes(uint8_t* in_buf,int nbytes,int timeout = 10){
-  int rc_total = 0;
-  while (rc_total != nbytes) {
-    int recieved = 0;
-    while (recieved < 1) {
-      recieved = serialport_read(fd, in_buf, nbytes-rc_total, timeout);
-#ifndef NDEBUG
-      fprintf(stdout, "Received this time: %d\n",recieved);
-      fprintf(stdout, "Need %d more bytes\n",nbytes-rc_total);
-#endif
-    }
-    rc_total += recieved;
-#ifndef NDEBUG
-    fprintf(stdout, "Received [%d] so far, out of [%d] \n",rc_total,nbytes);
-#endif
-  }
-}
-
-void Recieve(uint8_t* in_buf,const uint8_t * out_buf,int timeout = 10){
-  fprintf(stdout, "Recieve:\n");
-
-  // Read Header
-  recieve_nbytes(in_buf,HEADER_SIZE,timeout);
-  
-#ifndef NDEBUG
-  for (int i=0; i<HEADER_SIZE; i++) {
-    fprintf(stdout, "%02x ",in_buf[i]);
-  }
-  fprintf(stdout, "\n");
-#endif
-  
-  int N = in_buf[N_INDEX];
-  int L = in_buf[L_INDEX];
-  
-  int nbytes_body = N * (L+1);
-  
-  recieve_nbytes(&in_buf[HEADER_SIZE],nbytes_body,timeout);
-  
-#ifndef NDEBUG
-  for (int i=0;i<N; i++) {
-    for (int j=0;j<(L+1); j++) {
-      fprintf(stdout, "%02x ",in_buf[HEADER_SIZE+i*(L+1)+j]);
-    }
-    fprintf(stdout, "   ");
-  }
-  fprintf(stdout, "\n");
-#endif
-  
-  for (int i=0; i<3; i++) {
-    if(out_buf[i] != in_buf[i])
-      serialport_flush(fd);
-  }
-}
-
 /// Fills 'ids' with ids of servos that are accessible
-bool init(const char* sp,int baudrate,std::vector<int> ids){
+bool init(const char* sp,int baudrate){
   
   if( fd!=-1 ) {
     serialport_close(fd);
@@ -133,197 +50,121 @@ bool init(const char* sp,int baudrate,std::vector<int> ids){
 }
 
 /////////////////////////////////////////////////////////////////////////
-///////////////////////////  Data Parsing ////////////////////////////
+///////////////////////////  Control Handling ////////////////////////////
+#define VAL_FFFF 65535.0
+#define VAL_FFFF_2 VAL_FFFF/2.0
+const double MAX_POSITION = M_PI;
+const double MAX_SPEED  =  20.0;
+const double MAX_TORQUE =  20.0;
 
-template <class T>
-void data2vector(const uint8_t * in_buf,const std::vector<int>& ids,std::vector<T>& val){
-  T val_array[0xFF];
-  
-  int N = in_buf[N_INDEX];
-  int size_of_values = sizeof(T);
-  int L = in_buf[L_INDEX];
-  fprintf(stdout, "Parsing Message:\n");
-  fprintf(stdout, "N: %02x\n",N);
-  fprintf(stdout, "L: %02x\n",L);
-  fprintf(stdout, "size_of_values: %02x\n",size_of_values);
-
-  // now we only support single values in this function
-  //if(size_of_values != L-1)
-  //  error("Data being imported is the wrong size for this type!");
-  
-  for (int i=0;i<N; i++) {
-    uint8_t ind = in_buf[HEADER_SIZE+i*(L+1)];
-    memcpy(&val_array[ind],&in_buf[HEADER_SIZE+i*(L+1)+1],size_of_values);
-    fprintf(stdout, "%02x : ",ind);
-    fprintf(stdout, "%d ",val_array[ind]);
-    fprintf(stdout, "\n");
-  }
-  fprintf(stdout, "\n");
-  
-  for (int i=0;i<ids.size(); i++) {
-    val[i] = val_array[ids[i]];
-  }
-
+double uint16_to_real(int uint16_value, double max_value){
+  return (( uint16_value - VAL_FFFF_2) / VAL_FFFF_2) * max_value;
 }
 
-template <class T>
-void data2vecvec(const uint8_t * in_buf,const std::vector<int>& ids,std::vector<std::vector<T> >& val){
-  std::vector<T> val_array[0xFF];
+int real_to_uint16(double real_value, double max_value){
+  int return_val = ((real_value/max_value) * VAL_FFFF_2) + VAL_FFFF_2;
+  return return_val - (return_val % 2);
+}
+
+int concat_uint8_to_uint16(uint8_t L_BYTE, uint8_t H_BYTE){
+  return (L_BYTE % 0x100) + (((H_BYTE % 0x100 ) << 8) & 0xFF00);
+}
+
+void break_uint16_to_uint8(int uint16_value,uint8_t * L_BYTE, uint8_t * H_BYTE){
+  *L_BYTE = (uint8_t) (uint16_value % 0x100);
+  *H_BYTE = (uint8_t) (uint16_value / 0x100);
+}
+
+static int HEADER_SIZE = 2;
+
+bool setVal(const std::vector<int>& ids, const std::vector<double>& val){
+  if( fd == -1 ) error("serial port not opened");
+  int N = ids.size();
+  uint8_t buf[0xFF];
+  int index = 0;
+  for(int i=0;i<HEADER_SIZE;i++){
+    serialport_writebyte(fd,0xFF);
+  }
   
-  int N = in_buf[N_INDEX];
-  int L = in_buf[L_INDEX];
-  int size_of_values = sizeof(T);
+  for(int i=0;i<N;i++){
+    uint8_t id = ids[i] % 0x100;
+    serialport_writebyte(fd,id);
+    uint8_t Lval, Hval;
+    break_uint16_to_uint8(val[i],&Lval,&Hval);
+    serialport_writebyte(fd,Lval);
+    serialport_writebyte(fd,Hval);
+  }
+  return true;
+}
+
+bool getVal(std::vector<int>& ids, std::vector<double>& position, std::vector<double>& velocity, std::vector<double>& torque){
+  if( fd == -1 ) error("serial port not opened");
+  static int HEADER_FOUND = 0;
   
-  // For now we only do single values
-  int num_vals_per_id = L / size_of_values ;
-  for (int i=0;i<N; i++) {
-    for (int j=0,k=0;j<num_vals_per_id; j+=size_of_values,k+=1) {
-      val_array[in_buf[HEADER_SIZE+i*(L+1)]].push_back(*( (T*) &in_buf[HEADER_SIZE+i*(L+1)+1+j]));
+  if(HEADER_FOUND < HEADER_SIZE){
+    print("Searching for header, HEADER_FOUND = ");
+    println(HEADER_FOUND);
+    
+    int MAX_TRY_PER_LOOP = 10;
+    static uint8_t b[1];
+    int tries_this_time = 0;
+    while(serialport_read(fd, b, 1,MAX_TRY_PER_LOOP) != -1 && tries_this_time++<MAX_TRY_PER_LOOP){
+      if (b[0] == 0xFF){
+        HEADER_FOUND++;
+      }
+      else {
+        HEADER_FOUND = 0;
+      }
     }
   }
+  
+  const int  NUM_DATA  = 7;
+  int  NUM_ACTUATORS = ids.size();
+  if(HEADER_FOUND == HEADER_SIZE){
+    static int recieved_value;
 
-  for (int i=0;i<ids.size(); i++) {
-    val[i] = val_array[ids[i]];
+    static int servo_index = 0;
+    static int data_index = 0;
+    print("Searching for DATA, servo_index = ");
+    print(servo_index);
+    print(", data_index = ");
+    println(data_index);
+    
+    int MAX_TRY_PER_LOOP = 10;
+    static uint8_t vals[NUM_DATA];
+    uint8_t b[1];
+    while(serialport_read(fd, b, 1,MAX_TRY_PER_LOOP) != -1){
+      // increment data pointer
+      vals[data_index] = b[0];
+      data_index++;
+      if(data_index == NUM_DATA){
+        ids[servo_index] = vals[0];
+        int POSITION = concat_uint8_to_uint16(vals[1],vals[2]);
+        int SPEED    = concat_uint8_to_uint16(vals[3],vals[4]);
+        int LOAD     = concat_uint8_to_uint16(vals[5],vals[6]);
+        position[servo_index] = uint16_to_real(POSITION,MAX_POSITION);
+        velocity[servo_index] = uint16_to_real(SPEED,MAX_SPEED);
+        torque[servo_index] = uint16_to_real(LOAD,MAX_TORQUE);
+
+#ifdef OUTPUT_ASCII
+        print("id[ ");
+        print(servo_index);
+        print(" ]: ");
+        print(ids[servo_index]);
+        print(" got data: ");
+        println(position[servo_index]);
+        println(velocity[servo_index]);
+        println(torque[servo_index]);
+#endif
+        servo_index++;
+        data_index = 0;
+        if(servo_index == NUM_ACTUATORS){
+          servo_index = 0;
+          HEADER_FOUND = 0;
+          return true;
+        }
+      }
+    }
   }
+  return false;
 }
-
-/////////////////////////////////////////////////////////////////////////
-///////////////////////////  Control Handling ////////////////////////////
-
-namespace LocalTemplatedFcn {
-template<class T>
-bool setVal(const std::vector<int>& ids, const Parameter type, const std::vector<T>& val){
-  if( fd == -1 ) error("serial port not opened");
- // TODO: Tell servo to set desired POSITION of each servo in 'ids' to each positon in 'val'
-  
-  uint8_t N = ids.size() % 0x100;
-  const uint8_t L = sizeof(T);
-  
-  uint8_t buf[buf_max*buf_max];
-  buf[0] = INST_WRITE % 0x100;
-  buf[1] = (int)type % 0x100;
-  buf[2] = N;
-  buf[3] = L;
-
-  for(int i=0;i<N;i++){
-    uint8_t id = ids[i] % 0x100;
-    buf[HEADER_SIZE + i*(L+1)] = id;
-    memcpy( &buf[HEADER_SIZE + i*(L+1) + 1] , &val[i], L);
-  }
-  
-  Send(buf);
-  
-//  std::vector<T> val2(ids.size());
-//  data2vector<T>(buf,ids,val2);
-
-  return true;
-}
-
-template<class T>
-bool getVal(const std::vector<int>& ids, const Parameter type,  std::vector<T>& val){
-  if( fd == -1 ) error("serial port not opened");
- // TODO: Get POSITION of each servo in 'ids' and set 'val'
-  
-  uint8_t N = ids.size() % 0x100;
-  const uint8_t L = 0x00;
-  
-  uint8_t buf[buf_max*buf_max];
-  buf[0] = INST_READ % 0x100;
-  buf[1] = (int)type % 0x100;
-  buf[2] = N;
-  buf[3] = L;
-  
-  for(int i=0;i<N;i++){
-    uint8_t id = ids[i] % 0x100;
-    buf[HEADER_SIZE + i*(L+1)] = id;
-  }
-  
-  Send(buf);
-  
-  uint8_t in_buf[buf_max*buf_max];
-  Recieve(in_buf,buf);
-  
-  data2vector<T>(in_buf,ids,val);
-  
-  return true;
-}
-}
-
-bool ping(){
-  if( fd == -1 ) error("serial port not opened");
-  // TODO: Get POSITION of each servo in 'ids' and set 'val'
-  
-  uint8_t N = 0;
-  const uint8_t L = 0x00;
-  
-  uint8_t buf[buf_max*buf_max];
-  buf[0] = INST_PING ;
-  buf[1] = 0x00;
-  buf[2] = 0x01;
-  buf[3] = 0x00;
-  buf[4] = 0x01;
-  
-  Send(buf);
-  
-  uint8_t in_buf[buf_max*buf_max];
-  Recieve(in_buf,buf);
-  
-  assert(in_buf[4] == 1);
-  
-  return true;
-}
-
-  template<>
-  bool setVal<uint16_t>(const std::vector<int>& ids, const Parameter type, const std::vector<uint16_t>& val){
-    return LocalTemplatedFcn::setVal<uint16_t>(ids,type,val);
-  }
-  
-  template<>
-  bool getVal<uint16_t>(const std::vector<int>& ids, const Parameter type, std::vector<uint16_t>& val){
-    return LocalTemplatedFcn::getVal<uint16_t>(ids,type,val);
-  }
-  
-  // CHAR
-  template<>
-  bool setVal<uint8_t>(const std::vector<int>& ids, const Parameter type, const std::vector<uint8_t>& val){
-    return LocalTemplatedFcn::setVal<uint8_t>(ids,type,val);
-  }
-  
-  template<>
-  bool getVal<uint8_t>(const std::vector<int>& ids, const Parameter type, std::vector<uint8_t>& val){
-    return LocalTemplatedFcn::getVal<uint8_t>(ids,type,val);
-  }
-  
-  
-  // FLOAT (32 bit)
-  template<>
-  bool setVal<float>(const std::vector<int>& ids, const Parameter type, const std::vector<float>& val){
-    return LocalTemplatedFcn::setVal<float>(ids,type,val);
-  }
-  
-  template<>
-  bool getVal<float>(const std::vector<int>& ids, const Parameter type, std::vector<float>& val){
-    return LocalTemplatedFcn::getVal<float>(ids,type,val);
-  }
-  
-  // DOUBLE (64 bit)
-  template<>
-  bool setVal<double>(const std::vector<int>& ids, const Parameter type, const std::vector<double>& val){
-    return LocalTemplatedFcn::setVal<double>(ids,type,val);
-  }
-  
-  template<>
-  bool getVal<double>(const std::vector<int>& ids, const Parameter type, std::vector<double>& val){
-    return LocalTemplatedFcn::getVal<double>(ids,type,val);
-  }
-  
-  // INT (32 bit)
-  template<>
-  bool setVal<int>(const std::vector<int>& ids, const Parameter type, const std::vector<int>& val){
-    return LocalTemplatedFcn::setVal<int>(ids,type,val);
-  }
-  
-  template<>
-  bool getVal<int>(const std::vector<int>& ids, const Parameter type, std::vector<int>& val){
-    return LocalTemplatedFcn::getVal<int>(ids,type,val);
-  }

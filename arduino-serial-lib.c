@@ -15,7 +15,7 @@
 #include <sys/ioctl.h>
 
 // uncomment this to debug reads
-#define SERIALPORTDEBUG
+//#define SERIALPORTDEBUG
 
 // takes the string name of the serial port (e.g. "/dev/tty.usbserial","COM1")
 // and a baud rate (bps) and connects to that port at that speed and 8N1.
@@ -27,7 +27,7 @@ int serialport_init(const char* serialport, int baud)
   int fd;
   
   //fd = open(serialport, O_RDWR | O_NOCTTY | O_NDELAY);
-  fd = open(serialport, O_RDWR | O_NONBLOCK );
+  fd = open(serialport, O_RDWR | O_NOCTTY | O_NONBLOCK );
   
   if (fd == -1)  {
     perror("serialport_init: Unable to open port ");

@@ -13,47 +13,45 @@
  */
 
 int main(int argc, char* argv[]){
-  std::vector<int> ids(1);
-  for(int i=0;i<ids.size();i++){
-    ids[i] = i;
-  }
-  init(argv[1],atoi(argv[2]),ids);
+  std::vector<int> ids(3);
+  ids[0] = 3;
+  ids[0] = 7;
+  ids[0] = 11;
   
-  typedef uint16_t ValueType;
+  int baud = 115200;
+  init(argv[1],baud);
   
-//  ping();
-  
-//  double t = 0.0;
-//  // Use position controller
-//  while(t<5.0){
-//    std::vector<ValueType> pos(ids.size());
-//    for(int i=0;i<ids.size();i++){
-//      pos[i] = (ValueType) (2*1024 + 0.1*1024.0*sin(t*2.0*M_PI));
-//    }
-//    
-//    getVal<ValueType>(ids,P_POSITION,pos);
-//    usleep(10000);
-//    t += 0.001;
-//  }
-//
+  int N = ids.size();
   // Use torque controller
   double t = 0.0;
   while(t<5.0){
-    std::vector<ValueType> pos(ids.size()), vel(ids.size());
-    for(int i=0;i<ids.size();i++){
-      pos[i] = (ValueType) (1024 + 0.1*1024.0*sin(t*2.0*M_PI));
+    std::vector<double> send_pos(N);
+    for(int i=0;i<N;i++){
+      send_pos[i] = sin( t * (M_PI*2.0)) * (M_PI/4.0) ;
     }
     
-    setVal<ValueType>(ids,P_POSITION,pos);
-//    getVal<ValueType>(ids,P_POSITION,pos);
-//    getVal<ValueType>(ids,P_VELOCITY,vel);
-//    printf("|    POS    |    VEL    |\n");
-//    for(int i=0;i<ids.size();i++)
-//     printf("|  %7d  |  %7d  |\n",pos[i],vel[i]);
-//    printf("\n");
-    usleep(10000);
-    t += 0.001;
+    std::cout <<send_pos<<std::endl;
+    setVal(ids,send_pos);
+    
+    std::vector<double> pos(N), vel(N), torque(N);
+    std::vector<int> recieved_ids(N);
+    bool got_data = false;
+    got_data = getVal(recieved_ids,pos,vel,torque);
+    if(got_data){
+      printf("|    POS    |    VEL    |    TOR    | \n");
+      for(int i=0;i<N;i++)
+        printf("|  %1.6f  |  %2.5f  |  %2.5f  |\n",pos[i],vel[i],torque[i]);
+      printf("\n");
+    }
+    int Bps = ( baud / 10 );
+    int Bytes = ( N * 3 ) ;
+    double seconds_per_message = ( 1.0 / ((double) Bps) ) * ((double)Bytes);
+    
+    printf("Sleep %f s\n",seconds_per_message);
+    
+    usleep(1000 * (seconds_per_message*0.001));
+    t += seconds_per_message;
   }
-
+  
   return 0;
-}  
+}

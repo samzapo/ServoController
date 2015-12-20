@@ -2,41 +2,38 @@
 #define __SERVO_DRIVER_H__
 
 #include <vector>
+#include <map>
+#include <iostream>
 #include <stdint.h>
-  const uint8_t
-  INST_READ       = 1   ,
-  INST_WRITE      = 2   ,
-  INST_REG_WRITE  = 3   ,
-  INST_ACTION     = 4   ,
-  INST_RESET      = 5   ,
-  INST_PING       = 6   ,
-  INST_SYNC_WRITE = 0x83;
-  
-  // INFO
-  typedef uint8_t Parameter;
-  const uint8_t
-  TYPE_INDEX      = 0,
-  PARAMETER_INDEX = 1,
-  N_INDEX         = 2,
-  L_INDEX         = 3,
-  HEADER_SIZE     = 4;
-  
-  // PARAMETER
-  const uint8_t
-  P_EMPTY     = 0,
-  P_POSITION  = 1,
-  P_VELOCITY  = 2,
-  P_LOAD      = 3,
-  P_SPECIAL   = 4;
-  
-  bool init(const char* sp,int baud,std::vector<int> ids);
-  
-  template <class T>
-  bool getVal(const std::vector<int>& ids, const Parameter type, std::vector<T>& val);
-  
-  template <class T>
-  bool setVal(const std::vector<int>& ids, const Parameter type, const std::vector<T>& val);
-  
-  bool ping();
 
+template < class T >
+std::ostream& operator << (std::ostream& os, const std::vector<T>& v)
+{
+  os << "("<< v.size() <<")[";
+  for (typename std::vector<T>::const_iterator ii = v.begin(); ii != v.end(); ++ii)
+  {
+    os << " " << *ii;
+  }
+  os << "]";
+  return os;
+}
+
+template < class T >
+std::ostream& operator << (std::ostream& os, const std::map<std::string, T >& v)
+{
+  os << "("<< v.size() <<")[" << std::endl;
+  for (typename std::map<std::string, T >::const_iterator ii = v.begin(); ii != v.end(); ++ii)
+  {
+    os << " " << ii->first << " = " << ii->second << std::endl;
+  }
+  os << "]";
+  return os;
+}
+
+  bool init(const char* sp,int baud);
+  
+  bool getVal(std::vector<int>& ids, std::vector<double>& pos, std::vector<double>& vel, std::vector<double>& tor);
+
+  bool setVal(const std::vector<int>& ids, const std::vector<double>& val);
+  
 #endif // __SERVO_DRIVER_H__
