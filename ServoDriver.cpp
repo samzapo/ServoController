@@ -10,8 +10,15 @@
 #include <math.h>
 
 
+//#ifndef NDEBUG
 #define println(str) std::cerr << str<< std::endl
 #define print(str)   std::cerr << str
+//#else
+//#define println(str) 
+//#define print(str)   
+//#endif
+
+//#define OUTPUT_ASCII
 
 void error(char* msg)
 {
@@ -29,9 +36,7 @@ int rc,n;
 /////////////////////////////////////////////////////////////////////////
 ///////////////////////////  Serial Handling ////////////////////////////
 
-extern "C" {
 #include "arduino-serial-lib.h"
-}
 
 /// Fills 'ids' with ids of servos that are accessible
 bool init(const char* sp,int baudrate){
@@ -57,20 +62,20 @@ const double MAX_POSITION = M_PI;
 const double MAX_SPEED  =  20.0;
 const double MAX_TORQUE =  20.0;
 
-double uint16_to_real(int uint16_value, double max_value){
-  return (( uint16_value - VAL_FFFF_2) / VAL_FFFF_2) * max_value;
+double uint16_to_real(unsigned int uint16_value, double max_value){
+  return (( (long int) uint16_value - VAL_FFFF_2) / VAL_FFFF_2) * max_value;
 }
 
-int real_to_uint16(double real_value, double max_value){
+unsigned int real_to_uint16(double real_value, double max_value){
   int return_val = ((real_value/max_value) * VAL_FFFF_2) + VAL_FFFF_2;
   return return_val - (return_val % 2);
 }
 
-int concat_uint8_to_uint16(uint8_t L_BYTE, uint8_t H_BYTE){
+unsigned int concat_uint8_to_uint16(uint8_t L_BYTE, uint8_t H_BYTE){
   return (L_BYTE % 0x100) + (((H_BYTE % 0x100 ) << 8) & 0xFF00);
 }
 
-void break_uint16_to_uint8(int uint16_value,uint8_t * L_BYTE, uint8_t * H_BYTE){
+void break_uint16_to_uint8(unsigned int uint16_value,uint8_t * L_BYTE, uint8_t * H_BYTE){
   *L_BYTE = (uint8_t) (uint16_value % 0x100);
   *H_BYTE = (uint8_t) (uint16_value / 0x100);
 }
@@ -90,7 +95,8 @@ bool setVal(const std::vector<int>& ids, const std::vector<double>& val){
     uint8_t id = ids[i] % 0x100;
     serialport_writebyte(fd,id);
     uint8_t Lval, Hval;
-    break_uint16_to_uint8(val[i],&Lval,&Hval);
+    unsigned int ival = real_to_uint16(val[i],MAX_POSITION);
+    break_uint16_to_uint8(ival,&Lval,&Hval);
     serialport_writebyte(fd,Lval);
     serialport_writebyte(fd,Hval);
   }
@@ -100,51 +106,61 @@ bool setVal(const std::vector<int>& ids, const std::vector<double>& val){
 bool getVal(std::vector<int>& ids, std::vector<double>& position, std::vector<double>& velocity, std::vector<double>& torque){
   if( fd == -1 ) error("serial port not opened");
   static int HEADER_FOUND = 0;
+  static int servo_index = 0;
+  static int data_index = 0;
   
   if(HEADER_FOUND < HEADER_SIZE){
     print("Searching for header, HEADER_FOUND = ");
     println(HEADER_FOUND);
+    servo_index = 0;
+    data_index = 0; 
     
     int MAX_TRY_PER_LOOP = 10;
     static uint8_t b[1];
     int tries_this_time = 0;
-    while(serialport_read(fd, b, 1,MAX_TRY_PER_LOOP) != -1 && tries_this_time++<MAX_TRY_PER_LOOP){
+    while(HEADER_FOUND != HEADER_SIZE && serialport_read(fd, b, 1,MAX_TRY_PER_LOOP) != -1 && tries_this_time++<MAX_TRY_PER_LOOP){
       if (b[0] == 0xFF){
         HEADER_FOUND++;
-      }
-      else {
+      } else {
         HEADER_FOUND = 0;
       }
     }
   }
+    
+  print("HEADER_FOUND = ");
+  println(HEADER_FOUND);
   
-  const int  NUM_DATA  = 7;
+  const int  NUM_DATA  = 3;
   int  NUM_ACTUATORS = ids.size();
   if(HEADER_FOUND == HEADER_SIZE){
-    static int recieved_value;
+    static unsigned int recieved_value;
 
-    static int servo_index = 0;
-    static int data_index = 0;
+#ifdef OUTPUT_ASCII
     print("Searching for DATA, servo_index = ");
     print(servo_index);
     print(", data_index = ");
     println(data_index);
+#endif  
     
     int MAX_TRY_PER_LOOP = 10;
     static uint8_t vals[NUM_DATA];
     uint8_t b[1];
     while(serialport_read(fd, b, 1,MAX_TRY_PER_LOOP) != -1){
+    print("servo_index = ");
+    print(servo_index);
+    print(", data_index = ");
+    println(data_index);
       // increment data pointer
       vals[data_index] = b[0];
       data_index++;
       if(data_index == NUM_DATA){
         ids[servo_index] = vals[0];
-        int POSITION = concat_uint8_to_uint16(vals[1],vals[2]);
-        int SPEED    = concat_uint8_to_uint16(vals[3],vals[4]);
-        int LOAD     = concat_uint8_to_uint16(vals[5],vals[6]);
+        unsigned int POSITION = concat_uint8_to_uint16(vals[1],vals[2]);
+        //unsigned int SPEED    = concat_uint8_to_uint16(vals[3],vals[4]);
+        //unsigned int LOAD     = concat_uint8_to_uint16(vals[5],vals[6]);
         position[servo_index] = uint16_to_real(POSITION,MAX_POSITION);
-        velocity[servo_index] = uint16_to_real(SPEED,MAX_SPEED);
-        torque[servo_index] = uint16_to_real(LOAD,MAX_TORQUE);
+        //velocity[servo_index] = uint16_to_real(SPEED,MAX_SPEED);
+        //torque[servo_index] = uint16_to_real(LOAD,MAX_TORQUE);
 
 #ifdef OUTPUT_ASCII
         print("id[ ");
@@ -159,7 +175,6 @@ bool getVal(std::vector<int>& ids, std::vector<double>& position, std::vector<do
         servo_index++;
         data_index = 0;
         if(servo_index == NUM_ACTUATORS){
-          servo_index = 0;
           HEADER_FOUND = 0;
           return true;
         }

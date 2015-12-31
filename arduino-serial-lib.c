@@ -7,10 +7,12 @@
 #include "arduino-serial-lib.h"
 
 #include <stdio.h>    // Standard input/output definitions
+#include <stdlib.h>   
 #include <unistd.h>   // UNIX standard function definitions
 #include <fcntl.h>    // File control definitions
 #include <errno.h>    // Error number definitions
 #include <termios.h>  // POSIX terminal control definitions
+#include <time.h>     // nanosleep
 #include <string.h>   // String function definitions
 #include <sys/ioctl.h>
 
@@ -134,6 +136,11 @@ int serialport_read_until(int fd, uint8_t* buf, uint8_t until, int buf_max, int 
     }
 #ifdef SERIALPORTDEBUG
     printf("serialport_read_until: i=%d, n=%d b='%02x, t=%d'\n",i,n,b[0],timeout); // debug
+#else
+    timespec req,rem;
+    req.tv_nsec = 10;
+    req.tv_sec = 0;
+    nanosleep(&req,&rem);
 #endif
     buf[i] = b[0];
     i++;
@@ -160,6 +167,11 @@ int serialport_read(int fd, uint8_t* buf, int buf_max, int timeout)
     }
 #ifdef SERIALPORTDEBUG
     printf("serialport_read: i=%d, n=%d b='%02x', t=%d\n",i,n,b[0],timeout); // debug
+#else
+    timespec req,rem;
+    req.tv_nsec = 10;
+    req.tv_sec = 0;
+    nanosleep(&req,&rem);
 #endif
     buf[i] = b[0];
     i++;

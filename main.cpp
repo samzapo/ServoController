@@ -15,23 +15,28 @@
 int main(int argc, char* argv[]){
   std::vector<int> ids(3);
   ids[0] = 3;
-  ids[0] = 7;
-  ids[0] = 11;
+  ids[1] = 7;
+  ids[2] = 11;
   
   int baud = 115200;
   init(argv[1],baud);
   
   int N = ids.size();
+  int Bps = ( baud / 10 );
+  int Bytes = ( N * 3 ) ;
+  double seconds_per_message = ( 1.0 / ((double) Bps) ) * ((double)Bytes);
+  
   // Use torque controller
   double t = 0.0;
-  while(t<5.0){
-    std::vector<double> send_pos(N);
-    for(int i=0;i<N;i++){
-      send_pos[i] = sin( t * (M_PI*2.0)) * (M_PI/4.0) ;
-    }
-    
-    std::cout <<send_pos<<std::endl;
-    setVal(ids,send_pos);
+  while(1){  
+    //if(fmod(t,0.05) <= seconds_per_message){
+      std::vector<double> send_pos(N);
+      for(int i=0;i<N;i++){
+        send_pos[i] = sin( t * 2.0 * M_PI) * (M_PI/4.0) ;
+      }
+      std::cout << t << " : " <<send_pos<<std::endl;
+      setVal(ids,send_pos);
+    //}
     
     std::vector<double> pos(N), vel(N), torque(N);
     std::vector<int> recieved_ids(N);
@@ -43,13 +48,12 @@ int main(int argc, char* argv[]){
         printf("|  %1.6f  |  %2.5f  |  %2.5f  |\n",pos[i],vel[i],torque[i]);
       printf("\n");
     }
-    int Bps = ( baud / 10 );
-    int Bytes = ( N * 3 ) ;
-    double seconds_per_message = ( 1.0 / ((double) Bps) ) * ((double)Bytes);
     
-    printf("Sleep %f s\n",seconds_per_message);
-    
-    usleep(1000 * (seconds_per_message*0.001));
+    //printf("Sleep %f s\n",seconds_per_message);
+    timespec req,rem;
+    req.tv_nsec = seconds_per_message * 1.0e+9;
+    req.tv_sec = 0;
+    nanosleep(&req,&rem);
     t += seconds_per_message;
   }
   
