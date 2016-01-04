@@ -13,11 +13,13 @@
  */
 
 int main(int argc, char* argv[]){
-  std::vector<int> ids(3);
-  ids[0] = 3;
-  ids[1] = 7;
-  ids[2] = 11;
-  
+  std::vector<int> ids;//(3);
+  //ids[0] = 3;
+  //ids[1] = 7;
+  //ids[2] = 11;
+  for(int i=0;i<12;i++)
+    ids.push_back(i+1);
+
   int baud = 115200;
   init(argv[1],baud);
   
@@ -29,23 +31,21 @@ int main(int argc, char* argv[]){
   // Use torque controller
   double t = 0.0;
   while(1){  
-    //if(fmod(t,0.05) <= seconds_per_message){
-      std::vector<double> send_pos(N);
-      for(int i=0;i<N;i++){
-        send_pos[i] = sin( t * 2.0 * M_PI) * (M_PI/4.0) ;
-      }
-      std::cout << t << " : " <<send_pos<<std::endl;
-      setVal(ids,send_pos);
-    //}
+    std::vector<double> send_pos(N);
+    for(int i=0;i<N;i++){
+      send_pos[i] = sin( t * 2.0 * M_PI) * (M_PI/4.0) ;
+    }
+    //std::cout << t << " : " <<send_pos<< " -- " << ids <<std::endl;
+  //  setVal(ids,send_pos);
     
     std::vector<double> pos(N), vel(N), torque(N);
     std::vector<int> recieved_ids(N);
     bool got_data = false;
     got_data = getVal(recieved_ids,pos,vel,torque);
     if(got_data){
-      printf("|    POS    |    VEL    |    TOR    | \n");
+      printf(" ID |    POS    |    VEL    |    TOR    | \n");
       for(int i=0;i<N;i++)
-        printf("|  %1.6f  |  %2.5f  |  %2.5f  |\n",pos[i],vel[i],torque[i]);
+        printf(" %2d |  %1.6f  |  %2.5f  |  %2.5f  |\n",recieved_ids[i],pos[i],vel[i],torque[i]);
       printf("\n");
     }
     

@@ -10,13 +10,13 @@
 #include <math.h>
 
 
-//#ifndef NDEBUG
+#ifndef NDEBUG
 #define println(str) std::cerr << str<< std::endl
 #define print(str)   std::cerr << str
-//#else
-//#define println(str) 
-//#define print(str)   
-//#endif
+#else
+#define println(str) //usleep(1000)
+#define print(str) //usleep(1000)
+#endif
 
 //#define OUTPUT_ASCII
 
@@ -109,16 +109,16 @@ bool getVal(std::vector<int>& ids, std::vector<double>& position, std::vector<do
   static int servo_index = 0;
   static int data_index = 0;
   
-  if(HEADER_FOUND < HEADER_SIZE){
+  const int MAX_TRY_PER_LOOP = 10;
+  int tries_header = 0;
+  while(HEADER_FOUND < HEADER_SIZE && tries_header++<MAX_TRY_PER_LOOP){
     print("Searching for header, HEADER_FOUND = ");
     println(HEADER_FOUND);
     servo_index = 0;
     data_index = 0; 
     
-    int MAX_TRY_PER_LOOP = 10;
     static uint8_t b[1];
-    int tries_this_time = 0;
-    while(HEADER_FOUND != HEADER_SIZE && serialport_read(fd, b, 1,MAX_TRY_PER_LOOP) != -1 && tries_this_time++<MAX_TRY_PER_LOOP){
+    if(serialport_read(fd, b, 1,MAX_TRY_PER_LOOP) != -1 ){
       if (b[0] == 0xFF){
         HEADER_FOUND++;
       } else {
@@ -132,24 +132,21 @@ bool getVal(std::vector<int>& ids, std::vector<double>& position, std::vector<do
   
   const int  NUM_DATA  = 3;
   int  NUM_ACTUATORS = ids.size();
-  if(HEADER_FOUND == HEADER_SIZE){
-    static unsigned int recieved_value;
-
+  int tries_body = 0; 
+  while(HEADER_FOUND == HEADER_SIZE && tries_body++<MAX_TRY_PER_LOOP){
 #ifdef OUTPUT_ASCII
     print("Searching for DATA, servo_index = ");
     print(servo_index);
     print(", data_index = ");
     println(data_index);
 #endif  
-    
-    int MAX_TRY_PER_LOOP = 10;
     static uint8_t vals[NUM_DATA];
     uint8_t b[1];
-    while(serialport_read(fd, b, 1,MAX_TRY_PER_LOOP) != -1){
-    print("servo_index = ");
-    print(servo_index);
-    print(", data_index = ");
-    println(data_index);
+    if(serialport_read(fd, b, 1,MAX_TRY_PER_LOOP) != -1){
+      print("servo_index = ");
+      print(servo_index);
+      print(", data_index = ");
+      println(data_index);
       // increment data pointer
       vals[data_index] = b[0];
       data_index++;
