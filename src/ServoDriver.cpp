@@ -1,4 +1,4 @@
-#include "ServoDriver.h"
+#include <ServoController/ServoDriver.h>
 
 #include <iostream>
 #include <stdio.h>    // Standard input/output definitions
@@ -9,6 +9,30 @@
 #include <sstream>
 #include <math.h>
 
+//#define OUTPUT_ASCII
+template < class T >
+std::ostream& operator << (std::ostream& os, const std::vector<T>& v)
+{
+  os << "("<< v.size() <<")[";
+  for (typename std::vector<T>::const_iterator ii = v.begin(); ii != v.end(); ++ii)
+  {
+    os << " " << *ii;
+  }
+  os << "]";
+  return os;
+}
+
+template < class T >
+std::ostream& operator << (std::ostream& os, const std::map<std::string, T >& v)
+{
+  os << "("<< v.size() <<")[" << std::endl;
+  for (typename std::map<std::string, T >::const_iterator ii = v.begin(); ii != v.end(); ++ii)
+  {
+    os << " " << ii->first << " = " << ii->second << std::endl;
+  }
+  os << "]";
+  return os;
+}
 
 #ifndef NDEBUG
 #define println(str) std::cerr << str<< std::endl
@@ -18,7 +42,6 @@
 #define print(str) //usleep(1000)
 #endif
 
-//#define OUTPUT_ASCII
 
 void error(char* msg)
 {

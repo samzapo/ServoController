@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "ServoDriver.h"
+#include <ServoController/ServoDriver.h>
 
 /*  Server Controller test file
  *  Behavior: Servos with ids \in {1..12} will oscilate within 1/10 of their maximum range
@@ -13,13 +13,14 @@
  */
 
 int main(int argc, char* argv[]){
-  std::vector<int> ids;//(3);
-  //ids[0] = 3;
-  //ids[1] = 7;
-  //ids[2] = 11;
+  std::vector<int> ids(3);
+  ids[0] = 3;
+  ids[1] = 7;
+  ids[2] = 11;
+  /*
   for(int i=0;i<12;i++)
     ids.push_back(i+1);
-
+*/
   int baud = 115200;
   init(argv[1],baud);
   
@@ -33,11 +34,12 @@ int main(int argc, char* argv[]){
   while(1){  
     std::vector<double> send_pos(N);
     for(int i=0;i<N;i++){
-      send_pos[i] = sin( t * 2.0 * M_PI) * (M_PI/4.0) ;
+      send_pos[i] = sin( t * 2.0) * (M_PI/4.0) ;
     }
     //std::cout << t << " : " <<send_pos<< " -- " << ids <<std::endl;
-  //  setVal(ids,send_pos);
+    setVal(ids,send_pos);
     
+    /*
     std::vector<double> pos(N), vel(N), torque(N);
     std::vector<int> recieved_ids(N);
     bool got_data = false;
@@ -48,7 +50,7 @@ int main(int argc, char* argv[]){
         printf(" %2d |  %1.6f  |  %2.5f  |  %2.5f  |\n",recieved_ids[i],pos[i],vel[i],torque[i]);
       printf("\n");
     }
-    
+    */
     //printf("Sleep %f s\n",seconds_per_message);
     timespec req,rem;
     req.tv_nsec = seconds_per_message * 1.0e+9;

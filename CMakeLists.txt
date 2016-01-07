@@ -25,11 +25,15 @@ link_directories(
                   /usr/local/lib
                   )
 
-add_library(ServoController ServoDriver.cpp arduino-serial-lib.cpp)
+add_library(ServoController 
+                            src/ServoDriver.cpp 
+                            src/arduino-serial-lib.cpp)
+
 set_target_properties(ServoController PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 install(TARGETS ServoController DESTINATION lib)
 
-add_executable(ServoController-Test main.cpp)
+add_executable(ServoController-Test src/main.cpp)
 target_link_libraries(ServoController-Test ServoController)
 
 # install include dirs
